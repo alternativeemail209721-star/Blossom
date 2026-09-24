@@ -9,12 +9,21 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 
-let WebcastPushConnection = null;
-try {
-  WebcastPushConnection = require('tiktok-live-connector').WebcastPushConnection;
-} catch (e) {
-  console.error('tiktok-live-connector is not installed. Run "npm install" first.');
-}
+// tiktok-live-connector v2+ ships as an ES Module only (no more CommonJS
+// support), so a plain require('tiktok-live-connector') throws
+// "ERR_REQUIRE_ESM" — which the old code silently turned into the misleading
+// "is not installed" message even though npm install worked fine. A dynamic
+// import() can load an ESM package from CommonJS code, so we use that
+// instead and keep a ready-promise that startLive() awaits before connecting.
+let TikTokLiveConnection = null;
+let tiktokLiveConnectorLoadError = null;
+const tiktokLiveConnectorReady = import('tiktok-live-connector').then(function (mod) {
+  TikTokLiveConnection = mod.TikTokLiveConnection || mod.WebcastPushConnection || (mod.default && (mod.default.TikTokLiveConnection || mod.default.WebcastPushConnection));
+  if (!TikTokLiveConnection) throw new Error('tiktok-live-connector loaded, but no TikTokLiveConnection export was found (the package API may have changed again).');
+}).catch(function (e) {
+  tiktokLiveConnectorLoadError = e;
+  console.error('tiktok-live-connector could not be loaded:', e && e.message ? e.message : e);
+});
 
 const app = express();
 const server = http.createServer(app);
@@ -606,8 +615,18 @@ function stopLive() {
 }
 
 function startLive(username, typedKey) {
-  if (!WebcastPushConnection) {
-    return Promise.reject(new Error('tiktok-live-connector is not installed.'));
+  return tiktokLiveConnectorReady.then(function () {
+    return startLiveInner(username, typedKey);
+  });
+}
+
+function startLiveInner(username, typedKey) {
+  if (!TikTokLiveConnection) {
+    const msg = 'tiktok-live-connector failed to load'
+      + (tiktokLiveConnectorLoadError ? ': ' + tiktokLiveConnectorLoadError.message : ' (unknown reason)')
+      + '. Check the server logs; this usually means the package version in package.json '
+      + 'is broken or incompatible, or "npm install" did not finish. Try redeploying.';
+    return Promise.reject(new Error(msg));
   }
 
   // A key typed into the Live tab wins; otherwise use the saved / environment key.
@@ -646,7 +665,7 @@ function startLive(username, typedKey) {
         // Log the raw event shape once per connection so a non-coder can
         // see exactly what TikTok is sending if something looks wrong.
         let loggedSample = false;
-        tiktokConnection = new WebcastPushConnection(username, {
+        tiktokConnection = new TikTokLiveConnection(username, {
           signApiKey: apiKey,
           // Give the sign server a bit more time on a slow/free connection
           // instead of failing fast and burning a retry.
