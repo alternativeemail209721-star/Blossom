@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Blossom LIVE</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <div id="modeBar" class="sticky-top">
+    <button class="modeBtn" data-mode="offline">Offline</button>
+    <button class="modeBtn" data-mode="test">Test</button>
+    <button class="modeBtn" data-mode="live">Live</button>
+    <span id="modeLabel">OFFLINE</span>
+  </div>
+
+  <div id="rulesLegend">
+    Type words using these letters! Must include the <span id="centerCallout">center letter</span>. Find 20 words!
+  </div>
+
+  <div id="roundInfo">Round <span id="roundNumber">1</span> / <span id="roundTotal">10</span></div>
+
+  <div id="flower"></div>
+
+  <div id="slots"></div>
+
+  <div id="leaderboardWrap">
+    <h3>Top 10</h3>
+    <ol id="leaderboard"></ol>
+  </div>
+
+  <div id="diagnostics">
+    <div>All Raw Events: <span id="rawCount">0</span></div>
+    <div>Last Received: <span id="lastReceived">(none yet)</span></div>
+    <div id="liveStatus"></div>
+  </div>
+
+  <div id="bottomControls" class="sticky-bottom">
+
+    <div id="offlinePanel" class="panel">
+      <input id="offlineInput" type="text" placeholder="Type your guess..." autocomplete="off" />
+      <button id="offlineSubmit">Guess</button>
+    </div>
+
+    <div id="testPanel" class="panel">
+      <button id="testAutoBtn">Simulate Random Correct Guess</button>
+      <input id="testCustomInput" type="text" placeholder="Simulate custom chat text..." autocomplete="off" />
+      <button id="testCustomBtn">Send</button>
+    </div>
+
+    <div id="livePanel" class="panel">
+      <input id="liveUsernameInput" type="text" placeholder="TikTok username (no @)" autocomplete="off" />
+      <button id="liveConnectBtn">Connect</button>
+      <button id="liveDisconnectBtn">Disconnect</button>
+    </div>
+
+    <div id="hostPanel" class="panel">
+      <div class="hostTitle">Host Controls</div>
+      <input id="hostInput" type="text" placeholder="Type/override a comment as host..." autocomplete="off" />
+      <button id="hostSubmit">Submit</button>
+      <button id="hostSkip">Skip Round</button>
+      <button id="hostHint">Hint</button>
+    </div>
+
+  </div>
+
+</div>
+
+<div id="celebration" class="hidden">
+  <div id="celebrationText">Round Complete!</div>
+</div>
+
+<div id="toast" class="hidden"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/game.js"></script>
+</body>
+</html>

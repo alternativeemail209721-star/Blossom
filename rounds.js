@@ -1,0 +1,347 @@
+// rounds.js
+// 10 hardcoded puzzle rounds. Each round has 7 "letters", one "center"
+// letter (every accepted word must contain it), and the exact 20 "words"
+// the game accepts for that round. Add more rounds by copying the shape
+// of an existing one.
+module.exports = [
+  {
+    "letters": [
+      "A",
+      "E",
+      "I",
+      "L",
+      "N",
+      "R",
+      "T"
+    ],
+    "center": "N",
+    "words": [
+      "NAIL",
+      "NEAT",
+      "TERN",
+      "TINE",
+      "TINEA",
+      "INLET",
+      "INTER",
+      "LINEN",
+      "LINER",
+      "TRAIN",
+      "ARENA",
+      "ANTLER",
+      "NAILER",
+      "RETAIN",
+      "RETINA",
+      "ENTAIL",
+      "LEARNT",
+      "LANTERN",
+      "NATTIER",
+      "LATRINE"
+    ]
+  },
+  {
+    "letters": [
+      "A",
+      "C",
+      "E",
+      "H",
+      "R",
+      "S",
+      "T"
+    ],
+    "center": "C",
+    "words": [
+      "ACHE",
+      "ACHES",
+      "ACRE",
+      "ACRES",
+      "CARE",
+      "CARES",
+      "CART",
+      "CARTS",
+      "CASE",
+      "CASH",
+      "CATER",
+      "CHAR",
+      "CHART",
+      "CHASE",
+      "CHEAT",
+      "CRATE",
+      "REACT",
+      "SCARE",
+      "TEACH",
+      "TRACE"
+    ]
+  },
+  {
+    "letters": [
+      "D",
+      "E",
+      "I",
+      "L",
+      "N",
+      "O",
+      "R"
+    ],
+    "center": "D",
+    "words": [
+      "DINE",
+      "DINER",
+      "DIODE",
+      "DOER",
+      "DOLE",
+      "DOLED",
+      "DONE",
+      "IDLE",
+      "IDLER",
+      "INDEED",
+      "IODINE",
+      "LEND",
+      "LINED",
+      "LODE",
+      "LORD",
+      "LORDED",
+      "NODE",
+      "OILED",
+      "REDID",
+      "RIDDLE"
+    ]
+  },
+  {
+    "letters": [
+      "G",
+      "I",
+      "L",
+      "N",
+      "O",
+      "S",
+      "T"
+    ],
+    "center": "G",
+    "words": [
+      "GILT",
+      "GIST",
+      "GLINT",
+      "GLOSS",
+      "GOING",
+      "GOSLING",
+      "LOGIN",
+      "LOGS",
+      "LOSING",
+      "NOTING",
+      "SIGN",
+      "SING",
+      "SLING",
+      "SLOG",
+      "SONG",
+      "STING",
+      "TILING",
+      "TONGS",
+      "TOSSING",
+      "TOTING"
+    ]
+  },
+  {
+    "letters": [
+      "A",
+      "E",
+      "H",
+      "M",
+      "R",
+      "S",
+      "T"
+    ],
+    "center": "M",
+    "words": [
+      "HARM",
+      "HARMS",
+      "MARE",
+      "MARES",
+      "MART",
+      "MARTS",
+      "MASH",
+      "MAST",
+      "MASTER",
+      "MATE",
+      "MATES",
+      "MEAT",
+      "MEATS",
+      "MERE",
+      "SMART",
+      "STEAM",
+      "STREAM",
+      "TAMER",
+      "TEAM",
+      "TEAMS"
+    ]
+  },
+  {
+    "letters": [
+      "A",
+      "B",
+      "E",
+      "L",
+      "R",
+      "S",
+      "T"
+    ],
+    "center": "B",
+    "words": [
+      "BALE",
+      "BALER",
+      "BARE",
+      "BARS",
+      "BASE",
+      "BASER",
+      "BEAR",
+      "BEARS",
+      "BEAST",
+      "BEAT",
+      "BEATS",
+      "BEST",
+      "BLARE",
+      "BLAST",
+      "BLASTER",
+      "BREAST",
+      "RABBLE",
+      "STABLE",
+      "TABLE",
+      "TABLES"
+    ]
+  },
+  {
+    "letters": [
+      "A",
+      "E",
+      "L",
+      "N",
+      "P",
+      "S",
+      "T"
+    ],
+    "center": "P",
+    "words": [
+      "APES",
+      "LAPSE",
+      "NAPS",
+      "PALE",
+      "PALES",
+      "PANE",
+      "PANES",
+      "PANT",
+      "PANTS",
+      "PASTE",
+      "PEAL",
+      "PEALS",
+      "PLANE",
+      "PLANET",
+      "PLATE",
+      "PLEA",
+      "PLEAT",
+      "SPAN",
+      "SPAT",
+      "SPLAT"
+    ]
+  },
+  {
+    "letters": [
+      "A",
+      "E",
+      "N",
+      "R",
+      "S",
+      "T",
+      "W"
+    ],
+    "center": "W",
+    "words": [
+      "SWAT",
+      "SWEAR",
+      "SWEAT",
+      "WANE",
+      "WANES",
+      "WANT",
+      "WANTS",
+      "WART",
+      "WARTS",
+      "WASTE",
+      "WATER",
+      "WATERS",
+      "WEAR",
+      "WEARS",
+      "WEST",
+      "WREN",
+      "WRENS",
+      "WREST",
+      "WRESTS",
+      "WARREN"
+    ]
+  },
+  {
+    "letters": [
+      "A",
+      "C",
+      "E",
+      "N",
+      "O",
+      "R",
+      "T"
+    ],
+    "center": "O",
+    "words": [
+      "ACTOR",
+      "CANOE",
+      "CANTOR",
+      "CARTON",
+      "COAT",
+      "CONE",
+      "CORE",
+      "CORER",
+      "CORN",
+      "CORNET",
+      "CRONE",
+      "NOTE",
+      "OCEAN",
+      "OCTANE",
+      "ORATE",
+      "REACTOR",
+      "ROTE",
+      "TENOR",
+      "TONER",
+      "TRACTOR"
+    ]
+  },
+  {
+    "letters": [
+      "E",
+      "L",
+      "N",
+      "R",
+      "S",
+      "T",
+      "U"
+    ],
+    "center": "U",
+    "words": [
+      "LURE",
+      "LURES",
+      "LUST",
+      "LUSTER",
+      "NURSE",
+      "RULE",
+      "RULES",
+      "RUNT",
+      "RUNTS",
+      "RUSE",
+      "RUST",
+      "RUSTLE",
+      "SUET",
+      "SUNSET",
+      "TRUE",
+      "TRUER",
+      "TRUST",
+      "TUNER",
+      "UNREST",
+      "UNTRUE"
+    ]
+  }
+];
