@@ -647,7 +647,11 @@ function startLive(username, typedKey) {
         // see exactly what TikTok is sending if something looks wrong.
         let loggedSample = false;
         tiktokConnection = new WebcastPushConnection(username, {
-          signApiKey: apiKey
+          signApiKey: apiKey,
+          // Give the sign server a bit more time on a slow/free connection
+          // instead of failing fast and burning a retry.
+          webClientOptions: { timeout: 15000 },
+          wsClientOptions: { timeout: 15000 }
         });
 
         tiktokConnection.on('chat', function (data) {
@@ -721,8 +725,41 @@ function startLive(username, typedKey) {
       state.liveUsername = null;
       broadcastState();
     }
-    throw err;
+    throw explainLiveError(err, username);
   });
+}
+
+// Turns the raw "Failed to sign request: ... status code XXX" error from the
+// sign server into something a non-coder can actually act on. The most
+// common causes, in order of likelihood, are listed in the message.
+function explainLiveError(err, username) {
+  const raw = (err && err.message) || String(err);
+  const m = raw.match(/status code (\d+)/i);
+  const code = m ? m[1] : null;
+  let hint = '';
+  if (code === '403') {
+    hint = ' This almost always means one of: (1) your Euler Stream API key is '
+      + 'invalid, expired, or its free-tier daily quota is used up — check '
+      + 'https://www.eulerstream.com dashboard; (2) the TikTok account "' + username
+      + '" is not live right now — double-check the username and that you can see '
+      + 'the LIVE badge on their profile; or (3) TikTok is blocking requests from '
+      + 'this server\'s IP address, which is common on Render\'s shared/free IPs — '
+      + 'this is a TikTok-side block Euler Stream cannot always route around, and '
+      + 'may resolve itself later or need a paid Euler Stream plan with better routing.';
+  } else if (code === '429') {
+    hint = ' This means you have hit a rate limit — either Euler Stream\'s free-tier '
+      + 'request limit for the day, or TikTok itself. Wait a while before retrying, '
+      + 'or upgrade your Euler Stream plan.';
+  } else if (/timeout/i.test(raw)) {
+    hint = ' The sign server took too long to respond. This is usually temporary — '
+      + 'wait a moment and press Connect again.';
+  }
+  if (hint) {
+    const wrapped = new Error(raw + hint);
+    wrapped.needsKey = err && err.needsKey;
+    return wrapped;
+  }
+  return err;
 }
 
 // ---------------- ROUTES ----------------
