@@ -139,7 +139,12 @@ const DEFAULT_SETTINGS = {
   hintCooldownMs: 8000,
   hintDurationMs: 5000,
   skipCooldownMs: 600,
-  autoAdvanceEnabled: true,     // turn off to require a manual Skip Round between wins
+  // Auto-advance ("auto next") is switchable per mode. When it is off for the
+  // mode you are in, a finished round stays on screen until a host presses
+  // Skip Round.
+  autoAdvanceLive: true,        // Live Mode
+  autoAdvanceOffline: true,     // Offline Mode
+  autoAdvanceEnabled: true,     // Test Mode (name kept so older saved settings still work)
   autoAdvanceDelayMs: 5000,
   autoBotEnabled: false,        // Test Mode only: keep auto-simulating correct guesses
   paused: false,
@@ -174,6 +179,12 @@ function loadSettings() {
   try {
     saved = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
   } catch (e) { /* no saved settings yet — use defaults */ }
+  // Older versions had one auto-advance switch for every mode. If it was
+  // turned off, keep Live and Offline off too until the host changes them.
+  if (saved.autoAdvanceEnabled === false) {
+    if (!('autoAdvanceLive' in saved)) saved.autoAdvanceLive = false;
+    if (!('autoAdvanceOffline' in saved)) saved.autoAdvanceOffline = false;
+  }
   return sanitizeSettings(Object.assign({}, DEFAULT_SETTINGS, saved));
 }
 
@@ -387,6 +398,32 @@ function nextRound() {
   broadcastState();
 }
 
+// Is auto-advance switched on for the mode the game is in right now?
+function autoAdvanceOnForMode() {
+  const st = state.settings;
+  if (state.mode === 'live') return !!st.autoAdvanceLive;
+  if (state.mode === 'offline') return !!st.autoAdvanceOffline;
+  return !!st.autoAdvanceEnabled;   // test mode
+}
+
+// Keeps a COMPLETED round in step with the auto-advance switch: turning it on
+// while a finished round is waiting starts the countdown, turning it off
+// during the countdown cancels it. Does nothing while a round is in progress.
+function syncRoundAdvance() {
+  if (!advancingRound) return;
+  if (autoAdvanceOnForMode()) {
+    if (!roundTimer) {
+      roundTimer = setTimeout(function () {
+        roundTimer = null;
+        nextRound();
+      }, state.settings.autoAdvanceDelayMs);
+    }
+  } else if (roundTimer) {
+    clearTimeout(roundTimer);
+    roundTimer = null;
+  }
+}
+
 // Host "skip": ignores a second press within a moment (cooldown is a
 // customizable setting) so a double-click cannot skip two rounds by accident.
 function skipRound() {
@@ -483,15 +520,11 @@ function handleGuess(rawText, user, avatar, onReject) {
     if (isSecret && state.foundSecret.size >= round.words.length && !advancingRound) {
       advancingRound = true;
       io.emit('roundComplete', publicState());
-      if (state.settings.autoAdvanceEnabled) {
-        roundTimer = setTimeout(function () {
-          roundTimer = null;
-          nextRound();
-        }, state.settings.autoAdvanceDelayMs);
-      }
-      // When auto-advance is off, the round stays "complete" (celebration
-      // shown, no new guesses can fill it since every slot is found) until
-      // the host presses Skip Round to move on manually.
+      // Starts the countdown only if auto-advance is on for the current mode
+      // (Live / Offline / Test). When it is off, the round stays "complete"
+      // (celebration shown, no new guesses can fill it since every slot is
+      // found) until the host presses Skip Round to move on manually.
+      syncRoundAdvance();
     }
   } catch (err) {
     console.error('handleGuess error:', err);
@@ -600,6 +633,7 @@ function startLive(username, typedKey) {
   const myToken = liveToken;
   state.liveUsername = username;
   state.mode = 'live';
+  syncRoundAdvance();
   liveRetryCount = 0;
 
   function attemptConnect() {
@@ -683,6 +717,7 @@ function startLive(username, typedKey) {
     // Failed for good: leave Live mode instead of showing "LIVE" while disconnected.
     if (myToken === liveToken) {
       state.mode = 'offline';
+      syncRoundAdvance();
       state.liveUsername = null;
       broadcastState();
     }
@@ -718,6 +753,7 @@ app.post('/api/forget-api-key', function (req, res) {
 app.post('/api/stop-live', function (req, res) {
   stopLive();
   state.mode = 'offline';
+  syncRoundAdvance();
   broadcastState();
   res.json({ ok: true });
 });
@@ -729,6 +765,7 @@ app.post('/api/mode', function (req, res) {
   }
   if (mode !== 'live') stopLive();
   state.mode = mode;
+  syncRoundAdvance();
   broadcastState();
   res.json({ ok: true, state: publicState() });
 });
@@ -745,6 +782,7 @@ app.get('/api/settings', function (req, res) {
 app.post('/api/settings', function (req, res) {
   state.settings = sanitizeSettings(Object.assign({}, state.settings, req.body || {}));
   saveSettings();
+  syncRoundAdvance();
   broadcastState();
   res.json({ ok: true, settings: state.settings });
 });
@@ -831,6 +869,7 @@ io.on('connection', function (socket) {
       } else if (payload.type === 'updateSettings') {
         state.settings = sanitizeSettings(Object.assign({}, state.settings, payload.settings || {}));
         saveSettings();
+        syncRoundAdvance();
         broadcastState();
       }
     } catch (err) {

@@ -115,6 +115,7 @@
       <button id="hostSkip" type="button">Skip Round</button>
       <button id="hostHint" type="button">Hint</button>
       <button id="hostPause" type="button">Pause</button>
+      <button id="hostAutoNext" type="button" title="Turn automatic next round on or off for the current mode">Auto-Next: On</button>
       <input id="hostGotoRound" type="number" min="1" placeholder="Round #" title="Jump to round number" />
       <button id="hostGotoBtn" type="button">Go</button>
       <button id="hostResetRound" type="button">Reset Round Leaderboard</button>
@@ -254,7 +255,15 @@
           <input type="number" id="setSkipCooldown" min="0" max="5000" step="100" />
         </label>
         <label class="settingRow">
-          <span>Auto-advance to next round</span>
+          <span>Auto-next round: Live Mode</span>
+          <input type="checkbox" id="setAutoAdvanceLive" />
+        </label>
+        <label class="settingRow">
+          <span>Auto-next round: Offline Mode</span>
+          <input type="checkbox" id="setAutoAdvanceOffline" />
+        </label>
+        <label class="settingRow">
+          <span>Auto-next round: Test Mode</span>
           <input type="checkbox" id="setAutoAdvanceEnabled" />
         </label>
         <label class="settingRow">

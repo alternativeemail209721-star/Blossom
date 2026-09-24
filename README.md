@@ -63,16 +63,30 @@ survives a restart or redeploy. What you can customize:
   guesses it keeps, and how many names the leaderboard shows.
 - **Gameplay** — turn bonus words on/off, a points multiplier, minimum
   guess length, hint cooldown and on-screen duration, the skip-round
-  cooldown, whether rounds **auto-advance** at all, how long the game waits
-  after a round is won before auto-advancing, and whether **Test Mode**
-  keeps auto-answering with a bot until the round is complete.
+  cooldown, **Auto-next round** switches for **Live Mode**, **Offline Mode**
+  and **Test Mode** (each one independent), how long the game waits after a
+  round is won before auto-advancing, and whether **Test Mode** keeps
+  auto-answering with a bot until the round is complete.
 - **Sound** — on/off and volume for the built-in correct-guess, bonus,
   round-win, and hint sound effects (synthesized in the browser, so there
   are no audio files to manage).
 
-If you turn **auto-advance** off, a finished round stays on screen (with
-the celebration) until a host presses **Skip Round** to move on manually —
-handy for letting a round's win sink in before continuing.
+### Auto-next round (per mode)
+
+Auto-next can be switched on or off separately for **Live**, **Offline** and
+**Test** mode, either in Settings > Gameplay or with the **Auto-Next: On/Off**
+button in the host panel (the button always controls the mode you are
+currently in). For example, you can keep Live Mode on auto-next for a hands-off
+stream while Offline Mode waits for you to press Skip Round.
+
+If auto-next is off for the current mode, a finished round stays on screen
+(with the celebration) until a host presses **Skip Round** to move on
+manually — handy for letting a round's win sink in before continuing.
+Changes take effect immediately: turning it on while a finished round is
+waiting starts the countdown, and turning it off during the countdown cancels
+it. Switching modes applies the new mode's setting the same way. If you
+previously had auto-advance turned off, Live and Offline both start off until
+you change them.
 
 Test Mode also has its own **Auto-Answer** button next to "Simulate Random
 Correct Guess": turn it on and the game keeps simulating correct guesses by
@@ -98,6 +112,8 @@ Alongside Skip Round and Hint, the host panel has:
 
 - **Pause / Resume** — instantly stop accepting guesses on every screen,
   without disconnecting Live mode.
+- **Auto-Next: On / Off** — quick switch for automatic next round in the
+  mode you are currently in (see "Auto-next round" above).
 - **Round #, Go** — jump straight to any round by number.
 - **Reset Round Leaderboard** — clears just *this round's* leaderboard
   (asks for confirmation first); all-time scores are untouched.

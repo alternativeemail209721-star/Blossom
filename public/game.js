@@ -27,7 +27,8 @@ let settings = {
   confettiEnabled: true, compactMode: false, showDiagnostics: true, showRecentFeed: true,
   recentFeedSize: 12, feedItemDurationMs: 4000, leaderboardSize: 10, bonusWordsEnabled: true, pointsMultiplier: 1,
   minGuessLength: 4, hintCooldownMs: 8000, hintDurationMs: 5000, skipCooldownMs: 600,
-  autoAdvanceEnabled: true, autoAdvanceDelayMs: 5000, autoBotEnabled: false,
+  autoAdvanceLive: true, autoAdvanceOffline: true, autoAdvanceEnabled: true,
+  autoAdvanceDelayMs: 5000, autoBotEnabled: false,
   paused: false, soundEnabled: true, soundVolume: 0.5
 };
 
@@ -815,7 +816,9 @@ const settingsFields = {
   hintCooldownMs: document.getElementById('setHintCooldown'),     // seconds in UI
   hintDurationMs: document.getElementById('setHintDuration'),     // seconds in UI
   skipCooldownMs: document.getElementById('setSkipCooldown'),
-  autoAdvanceEnabled: document.getElementById('setAutoAdvanceEnabled'),
+  autoAdvanceLive: document.getElementById('setAutoAdvanceLive'),
+  autoAdvanceOffline: document.getElementById('setAutoAdvanceOffline'),
+  autoAdvanceEnabled: document.getElementById('setAutoAdvanceEnabled'),   // Test Mode
   autoAdvanceDelayMs: document.getElementById('setAutoAdvance'),  // seconds in UI
   autoBotEnabled: document.getElementById('setAutoBotEnabled'),
   soundEnabled: document.getElementById('setSoundEnabled'),
@@ -851,15 +854,35 @@ function applySettingsToDom() {
   pauseBtn.textContent = settings.paused ? 'Resume' : 'Pause';
   pauseBtn.classList.toggle('active', !!settings.paused);
 
+  // Host-panel quick toggle: always acts on the mode the game is really in.
+  const autoNextBtn = document.getElementById('hostAutoNext');
+  const autoNextOn = !!settings[autoAdvanceKeyForMode(currentMode)];
+  autoNextBtn.textContent = 'Auto-Next: ' + (autoNextOn ? 'On' : 'Off');
+  autoNextBtn.classList.toggle('active', autoNextOn);
+
   const autoBotBtn = document.getElementById('testAutoBotBtn');
   autoBotBtn.textContent = 'Auto-Answer: ' + (settings.autoBotEnabled ? 'On' : 'Off');
   autoBotBtn.classList.toggle('active', !!settings.autoBotEnabled);
+}
+
+// Which setting controls automatic next-round for a given mode.
+function autoAdvanceKeyForMode(mode) {
+  if (mode === 'live') return 'autoAdvanceLive';
+  if (mode === 'offline') return 'autoAdvanceOffline';
+  return 'autoAdvanceEnabled';   // test mode
 }
 
 function sendSettingsUpdate(partial) {
   if (!ensureConnected()) return;
   socket.emit('hostAction', { type: 'updateSettings', settings: partial });
 }
+
+document.getElementById('hostAutoNext').addEventListener('click', function () {
+  const key = autoAdvanceKeyForMode(currentMode);
+  const partial = {};
+  partial[key] = !settings[key];
+  sendSettingsUpdate(partial);   // the button label updates when the server confirms
+});
 
 Object.keys(settingsFields).forEach(function (key) {
   const field = settingsFields[key];

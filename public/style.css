@@ -1018,6 +1018,7 @@ html.hide-controls #liveFeedPanel { display: none; }
 /* host panel: new controls need to wrap nicely with everything else */
 #hostGotoRound { flex: 0 1 90px; }
 #hostPause.active { background: linear-gradient(#ffb1d3, #ff8abf); box-shadow: inset 0 2px 0 rgba(255,255,255,0.6), 0 4px 0 var(--strawberry-deep); }
+#hostAutoNext.active { background: linear-gradient(#b6f2d8, #7fe0b3); box-shadow: inset 0 2px 0 rgba(255,255,255,0.6), 0 4px 0 #3fa87c; }
 #testAutoBotBtn.active { background: linear-gradient(#b6f2d8, #7fe0b3); box-shadow: inset 0 2px 0 rgba(255,255,255,0.6), 0 4px 0 #3fa87c; }
 #hostResetRound, #hostReset { background: #fff0f0; }
 
