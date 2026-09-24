@@ -46,7 +46,8 @@ seconds, then floats back down and away before the next queued guess pops up.
 Exactly **one guess is shown at a time**. From Settings you can toggle the
 feed, set how many seconds each guess stays visible, and cap how many can be
 queued up if guesses arrive faster than they can be shown. It stays visible in
-the clean "Hide controls" stream view too.
+the clean "Hide controls" stream view too. It is the
+only pop-up shown for a found word, so nothing else floats over the instructions.
 
 ## Settings panel
 

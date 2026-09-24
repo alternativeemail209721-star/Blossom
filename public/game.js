@@ -940,11 +940,8 @@ socket.on('connect', function () {
 socket.on('wordFound', function (data) {
   boingBoard();
   playCorrectSound(data.secret);
-  if (data.secret) {
-    showToast(data.user + ' found ' + data.word + ' (+' + data.points + ')');
-  } else {
-    showToast('Bonus! ' + data.user + ' found ' + data.word + ' (+' + data.points + ')');
-  }
+  // The docked live guess feed below is the only pop-up for a found word
+  // (no separate toast, which used to float over the instructions).
   queueFeedItem({ user: data.user, word: data.word, points: data.points, secret: data.secret, avatar: data.avatar });
 });
 
