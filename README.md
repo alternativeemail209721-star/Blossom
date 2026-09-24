@@ -33,15 +33,17 @@ for) it's a colorful circle with their initials instead, generated on the
 fly — nothing ever shows a broken image. Turn avatars off entirely, or
 change their size, from Settings.
 
-## The floating live guess feed
+## The live guess feed
 
-A small floating panel (top right by default) shows **one guess at a
-time** — avatar, name, the word, and the points earned — like a live
-stream overlay. Each guess fades out a few seconds after it appears, then
-the next one (if any came in while it was showing) fades in. It's always
-reserved space, even when empty. From Settings you can toggle it, set how
-many seconds each guess stays visible, and cap how many can be queued up
-if guesses arrive faster than they can be shown (older ones are dropped).
+A small docked panel — sitting right below the instructions and above the
+seven letters — shows **one guess at a time**: avatar, name, the word, and
+the points earned. Each guess fades out a few seconds after it appears, then
+the next one (if any came in while it was showing) fades in. It collapses
+to almost nothing when there's nothing to show, so the letters and secret
+word boxes below it are always fully visible. From Settings you can toggle
+it, set how many seconds each guess stays visible, and cap how many can be
+queued up if guesses arrive faster than they can be shown (older ones are
+dropped).
 
 ## Settings panel
 
@@ -53,15 +55,25 @@ survives a restart or redeploy. What you can customize:
   Midnight), viewer avatars on/off and their size, board animations,
   confetti, compact/stream mode (hides the rules legend and diagnostics
   for a clean overlay), and the diagnostics panel itself.
-- **Live feed & leaderboard** — show/hide the floating feed, how many
+- **Live feed & leaderboard** — show/hide the docked live feed, how many
   guesses it keeps, and how many names the leaderboard shows.
 - **Gameplay** — turn bonus words on/off, a points multiplier, minimum
   guess length, hint cooldown and on-screen duration, the skip-round
-  cooldown, and how long the game waits after a round is won before
-  auto-advancing.
+  cooldown, whether rounds **auto-advance** at all, how long the game waits
+  after a round is won before auto-advancing, and whether **Test Mode**
+  keeps auto-answering with a bot until the round is complete.
 - **Sound** — on/off and volume for the built-in correct-guess, bonus,
   round-win, and hint sound effects (synthesized in the browser, so there
   are no audio files to manage).
+
+If you turn **auto-advance** off, a finished round stays on screen (with
+the celebration) until a host presses **Skip Round** to move on manually —
+handy for letting a round's win sink in before continuing.
+
+Test Mode also has its own **Auto-Answer** button next to "Simulate Random
+Correct Guess": turn it on and the game keeps simulating correct guesses by
+itself, at a steady pace, until every secret word is found — great for
+demos or leaving the screen running unattended.
 
 Note: lowering "Minimum guess length" below 4 only matters once your word
 database actually contains shorter words — the bundled `words-base.txt`
@@ -76,9 +88,25 @@ Alongside Skip Round and Hint, the host panel has:
 - **Pause / Resume** — instantly stop accepting guesses on every screen,
   without disconnecting Live mode.
 - **Round #, Go** — jump straight to any round by number.
-- **Reset Scores** — clears the leaderboard (asks for confirmation first).
-- **Export CSV** — downloads the current leaderboard as `leaderboard.csv`,
-  handy for picking winners after a session.
+- **Reset Round Leaderboard** — clears just *this round's* leaderboard
+  (asks for confirmation first); all-time scores are untouched.
+- **Reset All-Time Leaderboard** — clears the cumulative leaderboard across
+  every round (asks for confirmation first).
+- **Export CSV** — downloads the current all-time leaderboard as
+  `leaderboard.csv`, handy for picking winners after a session.
+
+### Two leaderboards: This Round vs All-Time
+
+The leaderboard panel now tracks **two** sets of scores at once:
+
+- **This Round** — resets to zero every time a new round starts, so it
+  always shows who's doing best on the *current* set of letters.
+- **All-Time** — keeps accumulating across every round for the whole
+  session, until a host resets it.
+
+Use the **This Round / All-Time** toggle above the leaderboard to switch
+which one is shown. Each has its own reset button in the host panel (see
+above), so you can clear one without touching the other.
 
 ## Live mode and the Euler Stream key
 

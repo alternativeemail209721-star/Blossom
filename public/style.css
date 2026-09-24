@@ -50,7 +50,7 @@ button, input { font-family: var(--font); }
   min-height: calc(var(--vh, 1vh) * 100);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 7px;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -138,15 +138,25 @@ button, input { font-family: var(--font); }
   color: var(--ink-soft);
 }
 
-/* ---------- rules ---------- */
+/* ---------- rules ----------
+   Locked to exactly two lines on phones: the copy is short enough to fit at
+   this size on typical phone widths, and the clamp is a hard backstop so it
+   can never grow to a third line even on a very narrow screen. */
 #rulesLegend {
   text-align: center;
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 13.5px;
+  line-height: 1.36;
   font-weight: 500;
-  padding: 10px 16px;
+  padding: 8px 16px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 #rulesLegend span { font-weight: 700; }
+@media (max-width: 360px) {
+  #rulesLegend { font-size: 12.5px; padding: 7px 12px; }
+}
 #centerCallout {
   display: inline-block;
   min-width: 1.5em;
@@ -168,11 +178,15 @@ button, input { font-family: var(--font); }
 
 /* ---------- the mochi board ---------- */
 #flower {
-  --flower: min(78vw, 340px);
+  /* Sized off both viewport width AND height so it shrinks on short phone
+     screens too — this is what keeps the instructions, live-feed slot,
+     letters, secret-word boxes and bonus count all on screen together
+     without scrolling on most phones. */
+  --flower: min(66vw, calc(var(--vh, 1vh) * 34), 300px);
   position: relative;
   width: var(--flower);
   height: var(--flower);
-  margin: 4px auto 6px auto;
+  margin: 2px auto 4px auto;
 }
 
 /* the round plate the mochi sit on */
@@ -356,7 +370,7 @@ button, input { font-family: var(--font); }
 
 /* ---------- progress + lengths ---------- */
 #progress {
-  padding: 8px 14px 10px 14px;
+  padding: 6px 14px 8px 14px;
 }
 #progressText {
   font-size: 14px;
@@ -380,27 +394,40 @@ button, input { font-family: var(--font); }
   transition: width 0.5s cubic-bezier(0.3, 1.4, 0.5, 1);
 }
 
+/* Always a single row: the chips shrink to fit rather than wrapping onto a
+   second line, and on very narrow screens the row scrolls sideways instead
+   of stacking, so it always stays clearly readable at a legible size. */
 #lengthChips {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
-  gap: 6px;
-  padding: 0 12px;
+  gap: 5px;
+  padding: 0 10px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+#lengthChips::-webkit-scrollbar { display: none; }
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
+  gap: 4px;
+  padding: 4px 8px;
   border-radius: 999px;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
+  flex: 0 0 auto;
   background: var(--chip, #fff);
   box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.8), 0 3px 0 var(--chip-edge, rgba(var(--sh), 0.25));
 }
 .chip b { font-weight: 700; }
 .chip.done { opacity: 0.6; }
 .chip.star { --chip: #fff1b8; --chip-edge: #e6b526; }
+@media (max-width: 360px) {
+  .chip { font-size: 11px; padding: 3px 6px; gap: 3px; }
+}
 
 /* length colors shared by chips and slots */
 .len-4 { --chip: #c3f3e2; --chip-edge: #6fd8b2; }
@@ -414,13 +441,14 @@ button, input { font-family: var(--font); }
 #slots {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 9px;
+  gap: 7px;
   padding: 4px 14px 6px 14px;
 }
 
 .slot {
   position: relative;
-  min-height: 46px;
+  /* shrinks on short screens so the whole board fits without scrolling */
+  min-height: clamp(34px, calc(var(--vh, 1vh) * 5), 46px);
   border-radius: 16px;
   display: flex;
   align-items: center;
@@ -531,10 +559,30 @@ button, input { font-family: var(--font); }
 
 /* ---------- leaderboard ---------- */
 #leaderboardWrap { padding: 8px 14px 10px 14px; }
-#leaderboardWrap h3 { margin: 2px 0 6px 0; font-size: 15px; font-weight: 700; }
-#leaderboard { margin: 0; padding-left: 22px; font-size: 14px; line-height: 1.6; }
-#leaderboard li::marker { color: var(--strawberry-deep); font-weight: 700; }
-#leaderboard li:nth-child(1) { font-weight: 700; }
+#leaderboardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 6px 0;
+}
+#leaderboardWrap h3 { margin: 0; font-size: 15px; font-weight: 700; }
+#leaderboardWrap h3 small { font-size: 11.5px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.03em; }
+#leaderboardViewToggle { display: inline-flex; gap: 4px; }
+.lbViewBtn {
+  border: none;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-family: var(--font);
+  color: var(--ink-soft);
+  background: rgba(var(--sh), 0.08);
+  cursor: pointer;
+}
+.lbViewBtn.active { background: var(--strawberry); color: #fff; box-shadow: 0 2px 0 var(--strawberry-deep); }
+#leaderboard li.lbEmpty { list-style: none; padding: 4px 0; font-size: 13px; color: var(--ink-soft); }
 
 #diagnostics {
   font-size: 11.5px;
@@ -719,7 +767,11 @@ html.hide-controls #app { padding-bottom: 68px; }
   .slot .word { font-size: clamp(13px, 1.3vw, 21px); }
   .slot .dots i { width: clamp(5px, 0.5vw, 8px); height: clamp(5px, 0.5vw, 8px); }
   .chip { font-size: clamp(12.5px, 1vw, 16px); }
-  #rulesLegend { font-size: clamp(14px, 1.15vw, 18px); }
+  #rulesLegend {
+    font-size: clamp(14px, 1.15vw, 18px);
+    -webkit-line-clamp: unset;
+    overflow: visible;
+  }
   #progressText { font-size: clamp(14px, 1.1vw, 17px); }
   #leaderboard { columns: 2; column-gap: 24px; }
   #leaderboard li { break-inside: avoid; }
@@ -920,61 +972,44 @@ html.hide-avatars .avatar { display: none; }
 #leaderboard li:first-child .lbName { font-weight: 800; }
 
 /* =======================================================================
-   FLOATING LIVE GUESS FEED — a reserved overlay window that shows exactly
-   ONE guess at a time (avatar, word, points), then fades it out a few
-   seconds later before the next queued guess fades in. Toggle from
-   Settings; position is fixed so it reads well as a stream overlay too.
+   DOCKED LIVE GUESS FEED — sits in normal page flow between the
+   instructions and the letters (NOT a floating overlay). Shows exactly ONE
+   guess at a time, then fades it out a few seconds later before the next
+   queued guess fades in. Collapses to near-zero height when there is
+   nothing to show, so it never pushes the letters or word boxes off
+   screen. Toggle from Settings.
    ======================================================================= */
 #liveFeedPanel {
-  position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 64px);
-  right: calc(env(safe-area-inset-right, 0px) + 10px);
-  width: min(260px, 60vw);
-  background: rgba(255, 249, 252, 0.92);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-radius: 18px;
-  box-shadow: 0 10px 24px rgba(var(--sh), 0.28), inset 0 2px 0 rgba(255, 255, 255, 0.9);
-  z-index: 55;
-  display: flex;
-  flex-direction: column;
+  margin: 0 12px;
+  max-width: min(320px, calc(100% - 24px));
+  background: var(--cream);
+  border-radius: 14px;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.9), 0 3px 8px rgba(var(--sh), 0.16);
   overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.22s ease, margin 0.22s ease;
 }
-html[data-theme="midnight"] #liveFeedPanel { background: rgba(36, 28, 58, 0.92); }
+#liveFeedPanel.has-item {
+  max-height: 60px;
+  margin: 2px 12px;
+}
+html[data-theme="midnight"] #liveFeedPanel { background: var(--cream); }
 html.hide-feed #liveFeedPanel,
 html.hide-controls #liveFeedPanel { display: none; }
 
-#liveFeedHeader {
-  flex: 0 0 auto;
-  padding: 8px 12px;
-  font-size: 12.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--ink-soft);
-  border-bottom: 2px dotted rgba(var(--sh), 0.2);
-}
 /* exactly one row lives here at a time */
 #liveFeedList {
-  padding: 8px;
-  min-height: 42px;
+  padding: 0 8px;
+  min-height: 0;
   display: flex;
   align-items: center;
 }
-#liveFeedList:empty::after {
-  content: "Guesses will appear here...";
-  display: block;
-  width: 100%;
-  padding: 4px 2px;
-  font-size: 12px;
-  color: var(--ink-soft);
-  text-align: center;
-}
+#liveFeedPanel.has-item #liveFeedList { padding: 7px 8px; }
 .feedRow {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
+  padding: 5px 8px;
   width: 100%;
   border-radius: 12px;
   background: rgba(var(--sh), 0.06);
@@ -995,13 +1030,11 @@ html.hide-controls #liveFeedPanel { display: none; }
   to { opacity: 0; transform: translateY(-6px) scale(0.96); }
 }
 
-@media (max-width: 480px) {
-  #liveFeedPanel { width: min(220px, 62vw); top: calc(env(safe-area-inset-top, 0px) + 58px); }
-}
-
 /* host panel: new controls need to wrap nicely with everything else */
 #hostGotoRound { flex: 0 1 90px; }
 #hostPause.active { background: linear-gradient(#ffb1d3, #ff8abf); box-shadow: inset 0 2px 0 rgba(255,255,255,0.6), 0 4px 0 var(--strawberry-deep); }
+#testAutoBotBtn.active { background: linear-gradient(#b6f2d8, #7fe0b3); box-shadow: inset 0 2px 0 rgba(255,255,255,0.6), 0 4px 0 #3fa87c; }
+#hostResetRound, #hostReset { background: #fff0f0; }
 
 /* =======================================================================
    SETTINGS MODAL

@@ -139,7 +139,9 @@ const DEFAULT_SETTINGS = {
   hintCooldownMs: 8000,
   hintDurationMs: 5000,
   skipCooldownMs: 600,
+  autoAdvanceEnabled: true,     // turn off to require a manual Skip Round between wins
   autoAdvanceDelayMs: 5000,
+  autoBotEnabled: false,        // Test Mode only: keep auto-simulating correct guesses
   paused: false,
   // Sound
   soundEnabled: true,
@@ -260,7 +262,8 @@ const state = {
   foundSecret: new Map(),   // SECRET WORD -> who found it
   bonusWords: [],           // [{ word, by, avatar }] valid dictionary words that are not secret words
   usedWords: new Set(),     // every word already found this round (secret + bonus)
-  scores: {},               // username -> points
+  scores: {},               // username -> ALL-TIME points
+  roundScores: {},          // username -> points earned THIS ROUND ONLY (reset every round)
   userAvatars: {},          // username -> avatar URL (real TikTok avatar, when known)
   recentGuesses: [],        // newest first: [{ user, word, points, secret, avatar, ts }]
   rawEventCount: 0,
@@ -297,6 +300,13 @@ function avatarFor(user) {
 
 function topScores(n) {
   return Object.entries(state.scores)
+    .map(function (e) { return { user: e[0], points: e[1], avatar: avatarFor(e[0]) }; })
+    .sort(function (a, b) { return b.points - a.points; })
+    .slice(0, n);
+}
+
+function topRoundScores(n) {
+  return Object.entries(state.roundScores)
     .map(function (e) { return { user: e[0], points: e[1], avatar: avatarFor(e[0]) }; })
     .sort(function (a, b) { return b.points - a.points; })
     .slice(0, n);
@@ -339,6 +349,7 @@ function publicState() {
     bonusRecent: state.bonusWords.slice(-8),
     dictionarySize: dictionary.size,
     leaderboard: topScores(s.leaderboardSize),
+    roundLeaderboard: topRoundScores(s.leaderboardSize),
     recentGuesses: state.recentGuesses.slice(0, s.recentFeedSize),
     liveUsername: state.liveUsername,
     liveConnected: state.liveConnected,
@@ -358,6 +369,7 @@ function resetRoundState() {
   state.foundSecret = new Map();
   state.bonusWords = [];
   state.usedWords = new Set();
+  state.roundScores = {};   // the "this round" leaderboard starts fresh every round
 }
 
 let advancingRound = false;
@@ -398,9 +410,18 @@ function gotoRound(oneBasedIndex) {
   return true;
 }
 
+// Resets the ALL-TIME leaderboard only. The current round's progress and
+// this-round leaderboard are untouched.
 function resetScores() {
   state.scores = {};
   state.recentGuesses = [];
+  broadcastState();
+}
+
+// Resets just THIS ROUND's leaderboard (does not touch all-time scores,
+// found words, or bonus words).
+function resetRoundScores() {
+  state.roundScores = {};
   broadcastState();
 }
 
@@ -444,6 +465,7 @@ function handleGuess(rawText, user, avatar, onReject) {
       state.bonusWords.push({ word: guess, by: who, avatar: avatarFor(who) });
     }
     state.scores[who] = (state.scores[who] || 0) + points;
+    state.roundScores[who] = (state.roundScores[who] || 0) + points;
 
     state.recentGuesses.unshift({
       user: who, word: guess, points: points, secret: isSecret,
@@ -461,15 +483,43 @@ function handleGuess(rawText, user, avatar, onReject) {
     if (isSecret && state.foundSecret.size >= round.words.length && !advancingRound) {
       advancingRound = true;
       io.emit('roundComplete', publicState());
-      roundTimer = setTimeout(function () {
-        roundTimer = null;
-        nextRound();
-      }, state.settings.autoAdvanceDelayMs);
+      if (state.settings.autoAdvanceEnabled) {
+        roundTimer = setTimeout(function () {
+          roundTimer = null;
+          nextRound();
+        }, state.settings.autoAdvanceDelayMs);
+      }
+      // When auto-advance is off, the round stays "complete" (celebration
+      // shown, no new guesses can fill it since every slot is found) until
+      // the host presses Skip Round to move on manually.
     }
   } catch (err) {
     console.error('handleGuess error:', err);
   }
 }
+
+// ---------------- TEST MODE: AUTO-ANSWER BOT ----------------
+// When Test Mode is active and "autoBotEnabled" is on, this keeps picking a
+// random unfound secret word and "guessing" it, at a steady pace, until the
+// round is complete — handy for demoing the game without typing anything.
+// It only ever acts while state.mode === 'test', so it can never interfere
+// with Offline or Live play.
+const AUTO_BOT_INTERVAL_MS = 1600;
+setInterval(function () {
+  try {
+    if (state.mode !== 'test') return;
+    if (!state.settings.autoBotEnabled) return;
+    if (state.settings.paused) return;
+    if (advancingRound) return; // round just completed — wait for the next one
+    const round = currentRound();
+    const remaining = round.words.filter(function (w) { return !state.foundSecret.has(w); });
+    if (!remaining.length) return;
+    const pick = remaining[Math.floor(Math.random() * remaining.length)];
+    handleGuess(pick, 'AutoBot', null);
+  } catch (err) {
+    console.error('Auto-bot tick error:', err);
+  }
+}, AUTO_BOT_INTERVAL_MS);
 
 // ---------------- TIKTOK LIVE ----------------
 let tiktokConnection = null;
@@ -725,6 +775,12 @@ io.on('connection', function (socket) {
         gotoRound(payload.index);
       } else if (payload.type === 'resetScores') {
         resetScores();
+      } else if (payload.type === 'resetRoundScores') {
+        resetRoundScores();
+      } else if (payload.type === 'toggleAutoBot') {
+        state.settings.autoBotEnabled = !state.settings.autoBotEnabled;
+        saveSettings();
+        broadcastState();
       } else if (payload.type === 'togglePause') {
         state.settings.paused = !state.settings.paused;
         saveSettings();

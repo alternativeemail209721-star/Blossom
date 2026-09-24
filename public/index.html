@@ -29,13 +29,20 @@
   <!-- Left column on wide screens; on phones the two columns simply stack -->
   <section id="colLeft">
     <div id="rulesLegend">
-      Type words made from these letters. Every word must use the center letter
-      (<span id="centerCallout">?</span>).
-      Find the <span id="slotsTotalText">20</span> secret words, each
-      <span id="lenRange">4 to 8</span> letters long!
+      Make words from these letters — always include the center letter
+      (<span id="centerCallout">?</span>). Find all <span id="slotsTotalText">20</span> secret
+      words, <span id="lenRange">4–8</span> letters long!
     </div>
 
-    <div id="roundInfo">Round <span id="roundNumber">1</span> / <span id="roundTotal">10</span></div>
+    <div id="roundInfo">Round <span id="roundNumber">1</span></div>
+
+    <!-- Docked live guess feed: sits below the instructions and above the
+         letters (not a floating overlay). Shows one guess at a time and
+         collapses to almost nothing when empty, so it never covers the
+         board or pushes it off screen. -->
+    <div id="liveFeedPanel" aria-label="Live guess feed">
+      <div id="liveFeedList"></div>
+    </div>
 
     <div id="flower" aria-label="Today's letters"></div>
 
@@ -56,7 +63,13 @@
     </div>
 
     <div id="leaderboardWrap">
-      <h3>Top <span id="leaderboardSizeLabel">10</span></h3>
+      <div id="leaderboardHeader">
+        <h3>Top <span id="leaderboardSizeLabel">10</span> <small id="leaderboardViewLabel">This Round</small></h3>
+        <div id="leaderboardViewToggle" role="group" aria-label="Leaderboard view">
+          <button type="button" class="lbViewBtn active" data-view="round">This Round</button>
+          <button type="button" class="lbViewBtn" data-view="allTime">All-Time</button>
+        </div>
+      </div>
       <ol id="leaderboard"></ol>
     </div>
 
@@ -77,6 +90,7 @@
 
     <div id="testPanel" class="panel">
       <button id="testAutoBtn" type="button">Simulate Random Correct Guess</button>
+      <button id="testAutoBotBtn" type="button" title="Keep auto-simulating correct guesses until the round is complete">Auto-Answer: Off</button>
       <input id="testCustomInput" type="text" placeholder="Simulate custom chat text..." autocomplete="off" autocapitalize="off" spellcheck="false" />
       <button id="testCustomBtn" type="button">Send</button>
     </div>
@@ -104,21 +118,13 @@
       <button id="hostPause" type="button">Pause</button>
       <input id="hostGotoRound" type="number" min="1" placeholder="Round #" title="Jump to round number" />
       <button id="hostGotoBtn" type="button">Go</button>
-      <button id="hostReset" type="button">Reset Scores</button>
+      <button id="hostResetRound" type="button">Reset Round Leaderboard</button>
+      <button id="hostReset" type="button">Reset All-Time Leaderboard</button>
       <button id="hostExport" type="button">Export CSV</button>
     </div>
 
   </div>
 
-</div>
-
-<!-- Floating live guess feed: reserved space that shows ONE guess at a time —
-     the viewer's circular avatar, the word they guessed, and the points they
-     gained — then fades out a few seconds later before the next one shows.
-     Toggled from Settings, position configurable via CSS. -->
-<div id="liveFeedPanel" aria-label="Live guess feed">
-  <div id="liveFeedHeader">Live Guess</div>
-  <div id="liveFeedList"></div>
 </div>
 
 <!-- Shown only while the controls are hidden (clean view for streaming) -->
@@ -185,7 +191,7 @@
       <div class="settingsGroup">
         <h3>Live feed &amp; leaderboard</h3>
         <label class="settingRow">
-          <span>Show floating live feed</span>
+          <span>Show live guess feed</span>
           <input type="checkbox" id="setShowFeed" />
         </label>
         <label class="settingRow">
@@ -229,8 +235,16 @@
           <input type="number" id="setSkipCooldown" min="0" max="5000" step="100" />
         </label>
         <label class="settingRow">
+          <span>Auto-advance to next round</span>
+          <input type="checkbox" id="setAutoAdvanceEnabled" />
+        </label>
+        <label class="settingRow">
           <span>Auto-advance delay (seconds)</span>
           <input type="number" id="setAutoAdvance" min="1" max="20" />
+        </label>
+        <label class="settingRow">
+          <span>Test Mode: bot auto-answers until round complete</span>
+          <input type="checkbox" id="setAutoBotEnabled" />
         </label>
       </div>
 

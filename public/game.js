@@ -27,7 +27,8 @@ let settings = {
   confettiEnabled: true, compactMode: false, showDiagnostics: true, showRecentFeed: true,
   recentFeedSize: 12, feedItemDurationMs: 4000, leaderboardSize: 10, bonusWordsEnabled: true, pointsMultiplier: 1,
   minGuessLength: 4, hintCooldownMs: 8000, hintDurationMs: 5000, skipCooldownMs: 600,
-  autoAdvanceDelayMs: 5000, paused: false, soundEnabled: true, soundVolume: 0.5
+  autoAdvanceEnabled: true, autoAdvanceDelayMs: 5000, autoBotEnabled: false,
+  paused: false, soundEnabled: true, soundVolume: 0.5
 };
 
 // ---------------- AVATARS ----------------
@@ -243,11 +244,30 @@ function renderBonus(count, recent) {
   });
 }
 
-// ---------------- LEADERBOARD ----------------
+// ---------------- LEADERBOARD (This Round vs All-Time) ----------------
+let leaderboardView = 'round';   // 'round' | 'allTime'
+let lastRoundLeaderboard = [];
+let lastAllTimeLeaderboard = [];
+
+function currentLeaderboardEntries() {
+  return leaderboardView === 'allTime' ? lastAllTimeLeaderboard : lastRoundLeaderboard;
+}
+
 function renderLeaderboard(entries) {
   document.getElementById('leaderboardSizeLabel').textContent = settings.leaderboardSize;
+  document.getElementById('leaderboardViewLabel').textContent = leaderboardView === 'allTime' ? 'All-Time' : 'This Round';
+  document.querySelectorAll('.lbViewBtn').forEach(function (btn) {
+    btn.classList.toggle('active', btn.dataset.view === leaderboardView);
+  });
   const el = document.getElementById('leaderboard');
   el.innerHTML = '';
+  if (!entries.length) {
+    const empty = document.createElement('li');
+    empty.className = 'lbEmpty';
+    empty.textContent = leaderboardView === 'allTime' ? 'No points yet' : 'No points yet this round';
+    el.appendChild(empty);
+    return;
+  }
   entries.forEach(function (row, i) {
     const li = document.createElement('li');
     const rank = document.createElement('span');
@@ -267,10 +287,11 @@ function renderLeaderboard(entries) {
   });
 }
 
-// ---------------- LIVE GUESS FEED (floating window, one at a time) ----------------
-// Only ever one guess is shown in the floating panel. New guesses queue up
-// (oldest dropped first if the queue grows past the "max queued" setting)
-// and each one fades out after "feedItemDurationMs" before the next fades in.
+// ---------------- LIVE GUESS FEED (docked, one at a time) ----------------
+// Only ever one guess is shown, in the docked panel between the instructions
+// and the letters. New guesses queue up (oldest dropped first if the queue
+// grows past the "max queued" setting) and each one fades out after
+// "feedItemDurationMs" before the next fades in.
 let feedQueue = [];
 let feedShowing = false;
 let feedHideTimer = null;
@@ -284,8 +305,10 @@ function queueFeedItem(row) {
 }
 
 function renderFeedRow(row) {
+  const panel = document.getElementById('liveFeedPanel');
   const list = document.getElementById('liveFeedList');
   list.innerHTML = '';
+  panel.classList.add('has-item');
   const item = document.createElement('div');
   item.className = 'feedRow' + (row.secret ? '' : ' bonus');
   if (settings.showAvatars) item.appendChild(makeAvatar(row.user, row.avatar));
@@ -313,8 +336,10 @@ function processFeedQueue() {
   const duration = Math.max(1000, settings.feedItemDurationMs || 4000);
   if (feedHideTimer) clearTimeout(feedHideTimer);
   feedHideTimer = setTimeout(function () {
+    const panel = document.getElementById('liveFeedPanel');
     if (reduceMotion) {
       el.remove();
+      panel.classList.remove('has-item');
       feedShowing = false;
       processFeedQueue();
       return;
@@ -323,6 +348,7 @@ function processFeedQueue() {
     el.addEventListener('animationend', function onEnd() {
       el.removeEventListener('animationend', onEnd);
       el.remove();
+      panel.classList.remove('has-item');
       feedShowing = false;
       processFeedQueue();
     });
@@ -334,6 +360,7 @@ function clearFeed() {
   feedShowing = false;
   if (feedHideTimer) { clearTimeout(feedHideTimer); feedHideTimer = null; }
   document.getElementById('liveFeedList').innerHTML = '';
+  document.getElementById('liveFeedPanel').classList.remove('has-item');
 }
 
 // ---------------- DIAGNOSTICS ----------------
@@ -507,7 +534,7 @@ function renderKeyStatus() {
   } else if (serverHasKey) {
     html = '\u2713 A key is saved on the server. Leave this box empty to use it.';
   } else {
-    html = 'Live mode needs a free Euler Stream key: <a href="https://www.eulerstream.com" target="_blank" rel="noopener">get one at eulerstream.com</a>, then paste it above.';
+    html = 'No key saved yet. Paste your Euler Stream API key above.';
   }
   keyStatusEl.innerHTML = html;   // static text only, no user input in here
   keyInput.placeholder = serverHasKey ? 'Euler key (optional, server has one)' : 'Euler Stream API key';
@@ -720,12 +747,31 @@ document.getElementById('hostGotoRound').addEventListener('keydown', function (e
 
 document.getElementById('hostReset').addEventListener('click', function () {
   if (!ensureConnected()) return;
-  if (!window.confirm('Reset every viewer\'s score to zero? This cannot be undone.')) return;
+  if (!window.confirm('Reset the ALL-TIME leaderboard to zero for every viewer? This cannot be undone.')) return;
   socket.emit('hostAction', { type: 'resetScores' });
 });
 
 document.getElementById('hostExport').addEventListener('click', function () {
   window.open('/api/export-leaderboard', '_blank');
+});
+
+document.getElementById('hostResetRound').addEventListener('click', function () {
+  if (!ensureConnected()) return;
+  if (!window.confirm('Reset THIS ROUND\'s leaderboard to zero? All-time scores are not affected.')) return;
+  socket.emit('hostAction', { type: 'resetRoundScores' });
+});
+
+document.querySelectorAll('.lbViewBtn').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    leaderboardView = btn.dataset.view;
+    renderLeaderboard(currentLeaderboardEntries());
+  });
+});
+
+// ---------------- TEST MODE: AUTO-ANSWER BOT TOGGLE ----------------
+document.getElementById('testAutoBotBtn').addEventListener('click', function () {
+  if (!ensureConnected()) return;
+  socket.emit('hostAction', { type: 'toggleAutoBot' });
 });
 
 // ---------------- SETTINGS PANEL ----------------
@@ -748,7 +794,9 @@ const settingsFields = {
   hintCooldownMs: document.getElementById('setHintCooldown'),     // seconds in UI
   hintDurationMs: document.getElementById('setHintDuration'),     // seconds in UI
   skipCooldownMs: document.getElementById('setSkipCooldown'),
+  autoAdvanceEnabled: document.getElementById('setAutoAdvanceEnabled'),
   autoAdvanceDelayMs: document.getElementById('setAutoAdvance'),  // seconds in UI
+  autoBotEnabled: document.getElementById('setAutoBotEnabled'),
   soundEnabled: document.getElementById('setSoundEnabled'),
   soundVolume: document.getElementById('setSoundVolume')
 };
@@ -780,6 +828,10 @@ function applySettingsToDom() {
   const pauseBtn = document.getElementById('hostPause');
   pauseBtn.textContent = settings.paused ? 'Resume' : 'Pause';
   pauseBtn.classList.toggle('active', !!settings.paused);
+
+  const autoBotBtn = document.getElementById('testAutoBotBtn');
+  autoBotBtn.textContent = 'Auto-Answer: ' + (settings.autoBotEnabled ? 'On' : 'Off');
+  autoBotBtn.classList.toggle('active', !!settings.autoBotEnabled);
 }
 
 function sendSettingsUpdate(partial) {
@@ -835,13 +887,14 @@ function applyState(s) {
   // screens cause a state update in the meantime.
   setActiveModeButton(liveTabOpen ? 'live' : s.mode);
   document.getElementById('roundNumber').textContent = s.roundNumber;
-  document.getElementById('roundTotal').textContent = s.totalRounds;
   renderBoard(s.letters, s.center);
   renderRules(s);
   renderLengthChips(s);
   renderSlots(s.slots);
   renderBonus(s.bonusCount, s.bonusRecent);
-  renderLeaderboard(s.leaderboard);
+  lastRoundLeaderboard = s.roundLeaderboard || [];
+  lastAllTimeLeaderboard = s.leaderboard || [];
+  renderLeaderboard(currentLeaderboardEntries());
   renderDiagnostics(s.rawEventCount, s.lastReceived, s.liveConnected, s.liveUsername, s.dictionarySize);
 }
 
