@@ -473,18 +473,96 @@ document.querySelectorAll('.modeBtn').forEach(function (btn) {
   });
 });
 
+// ---- Euler Stream API key (needed for Live mode) ----
+// The key box lives in the Live tab. The key is remembered in this browser
+// (localStorage) and, after a successful connect, on the server too, so the
+// host normally only has to paste it once. The server never sends the key back
+// to any screen; it only says whether it has one (hasApiKey / apiKeySource).
+const KEY_STORAGE = 'blossomEulerApiKey';
+const keyInput = document.getElementById('liveKeyInput');
+const keyToggleBtn = document.getElementById('liveKeyToggle');
+const keyForgetBtn = document.getElementById('liveKeyForget');
+const keyStatusEl = document.getElementById('liveKeyStatus');
+let serverHasKey = false;
+let serverKeySource = null;
+
+function readStoredKey() {
+  try { return localStorage.getItem(KEY_STORAGE) || ''; } catch (e) { return ''; }
+}
+function writeStoredKey(key) {
+  try {
+    if (key) localStorage.setItem(KEY_STORAGE, key);
+    else localStorage.removeItem(KEY_STORAGE);
+  } catch (e) { /* private mode etc.: the server still remembers it */ }
+}
+keyInput.value = readStoredKey();
+
+function renderKeyStatus() {
+  const hasTyped = !!keyInput.value.trim();
+  let html;
+  if (hasTyped) {
+    html = 'Key ready. It is saved after a successful connect.';
+  } else if (serverHasKey && serverKeySource === 'env') {
+    html = '\u2713 The server already has a key (from its environment settings). Leave this box empty to use it.';
+  } else if (serverHasKey) {
+    html = '\u2713 A key is saved on the server. Leave this box empty to use it.';
+  } else {
+    html = 'Live mode needs a free Euler Stream key: <a href="https://www.eulerstream.com" target="_blank" rel="noopener">get one at eulerstream.com</a>, then paste it above.';
+  }
+  keyStatusEl.innerHTML = html;   // static text only, no user input in here
+  keyInput.placeholder = serverHasKey ? 'Euler key (optional, server has one)' : 'Euler Stream API key';
+  keyForgetBtn.style.display = (hasTyped || serverKeySource === 'saved') ? '' : 'none';
+}
+keyInput.addEventListener('input', renderKeyStatus);
+
+keyToggleBtn.addEventListener('click', function () {
+  const showing = keyInput.type === 'text';
+  keyInput.type = showing ? 'password' : 'text';
+  keyToggleBtn.textContent = showing ? 'Show' : 'Hide';
+});
+
+keyForgetBtn.addEventListener('click', function () {
+  keyInput.value = '';
+  writeStoredKey('');
+  fetch('/api/forget-api-key', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      serverHasKey = !!data.hasApiKey;
+      serverKeySource = data.apiKeySource || null;
+      renderKeyStatus();
+      showToast(serverHasKey ? 'Saved key removed (the server still has its own key)' : 'Euler key removed');
+    })
+    .catch(function (err) { showToast('Could not remove the key'); console.error(err); });
+});
+
+keyInput.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') document.getElementById('liveConnectBtn').click();
+});
+
 document.getElementById('liveConnectBtn').addEventListener('click', function () {
   const username = document.getElementById('liveUsernameInput').value.trim().replace(/^@+/, '');
   if (!username) { showToast('Enter a TikTok username first'); return; }
+  const apiKey = keyInput.value.trim();
+  if (!apiKey && !serverHasKey) {
+    showToast('Paste your Euler Stream API key in the key box first (free at eulerstream.com)', 4500);
+    keyInput.focus();
+    return;
+  }
+  showToast('Connecting to @' + username + '...');
   fetch('/api/start-live', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: username })
+    body: JSON.stringify({ username: username, apiKey: apiKey })
   })
     .then(function (r) { return r.json(); })
     .then(function (data) {
-      if (!data.ok) showToast('Live connect failed: ' + data.error);
-      else showToast('Connecting to @' + username + '...');
+      if (!data.ok) {
+        showToast('Live connect failed: ' + data.error, 5000);
+        if (data.needsKey) keyInput.focus();
+      } else {
+        if (apiKey) writeStoredKey(apiKey);   // it worked, so remember it on this device
+        showToast('Connected to @' + username);
+      }
     })
     .catch(function (err) { showToast('Live connect failed'); console.error(err); });
 });
@@ -749,6 +827,9 @@ function applyState(s) {
   currentCenter = s.center;
   if (s.settings) settings = s.settings;
   applySettingsToDom();
+  serverHasKey = !!s.hasApiKey;
+  serverKeySource = s.apiKeySource || null;
+  renderKeyStatus();
   if (s.mode === 'live') liveTabOpen = false;
   // Stay on the Live tab while the person is typing a username, even if other
   // screens cause a state update in the meantime.

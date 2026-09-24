@@ -82,9 +82,17 @@
     </div>
 
     <div id="livePanel" class="panel">
-      <input id="liveUsernameInput" type="text" placeholder="TikTok username (no @)" autocomplete="off" autocapitalize="off" spellcheck="false" />
-      <button id="liveConnectBtn" type="button">Connect</button>
-      <button id="liveDisconnectBtn" type="button">Disconnect</button>
+      <div class="liveRow">
+        <input id="liveUsernameInput" type="text" placeholder="TikTok username (no @)" autocomplete="off" autocapitalize="off" spellcheck="false" />
+        <button id="liveConnectBtn" type="button">Connect</button>
+        <button id="liveDisconnectBtn" type="button">Disconnect</button>
+      </div>
+      <div class="liveRow">
+        <input id="liveKeyInput" type="password" name="euler-api-key" placeholder="Euler Stream API key" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" />
+        <button id="liveKeyToggle" type="button" title="Show or hide the key">Show</button>
+        <button id="liveKeyForget" type="button" title="Remove the saved key">Forget</button>
+      </div>
+      <div id="liveKeyStatus"></div>
     </div>
 
     <div id="hostPanel" class="panel">

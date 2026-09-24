@@ -80,6 +80,27 @@ Alongside Skip Round and Hint, the host panel has:
 - **Export CSV** — downloads the current leaderboard as `leaderboard.csv`,
   handy for picking winners after a session.
 
+## Live mode and the Euler Stream key
+
+LIVE mode reads your TikTok chat through Euler Stream, which needs a free API
+key (create an account at https://www.eulerstream.com, then create a key).
+
+1. Tap **Live** in the mode bar at the top.
+2. Type your TikTok username (without the @).
+3. Paste your key into the **Euler Stream API key** box. **Show** reveals what
+   you pasted; pasting the whole `EULERSTREAM_API_KEY=...` line also works.
+4. Press **Connect**.
+
+After a successful connect the key is remembered in that browser and saved on
+the server (`data/secrets.json`), so next time you only need your username.
+**Forget** removes the saved key from both places. The key is never shown back
+on any screen, and `data/secrets.json` is in `.gitignore` so it is never
+uploaded to GitHub.
+
+The key is looked up in this order: the box in the Live tab, then the key saved
+on the server, then the `EULERSTREAM_API_KEY` setting (`.env` file or Render
+Environment), which still works if you prefer it.
+
 ## Host controls, fullscreen and clean view
 
 - **Skip Round** jumps to the next round on every connected screen. It ignores
@@ -104,11 +125,13 @@ Alongside Skip Round and Hint, the host panel has:
 1. Install Node.js from https://nodejs.org (version 18 or newer).
 2. Open a terminal in this folder and run: `npm install`
    (this also builds the big word database, see below)
-3. Copy `.env.example` to `.env`. For LIVE mode, paste a free key from
-   https://www.eulerstream.com after `EULERSTREAM_API_KEY=`.
-4. Run: `npm start` and open http://localhost:3000
+3. Run: `npm start` and open http://localhost:3000
+4. For LIVE mode, open the **Live** tab, type your TikTok username, paste your
+   free Euler Stream API key (from https://www.eulerstream.com) into the
+   **Euler Stream API key** box, and press **Connect** (see "Live mode and the
+   Euler Stream key" below).
 
-Offline and Test mode work without any key.
+Offline and Test mode work without any key. You do **not** need a `.env` file.
 Files starting with a dot (`.env.example`, `.gitignore`) are hidden on
 Windows/Mac. They are in the folder; that is normal.
 
@@ -117,9 +140,16 @@ Windows/Mac. They are in the folder; that is normal.
 1. Push this folder to a new GitHub repository (GitHub Desktop is easiest).
 2. On https://render.com choose New + > Web Service and connect the repository.
 3. Build Command: `npm install`   Start Command: `npm start`
-4. Environment: add `EULERSTREAM_API_KEY` (only needed for Live mode).
-5. Deploy. The public URL Render gives you is the link for your streaming
-   device or browser source.
+4. Deploy. No environment variables are required.
+5. Open the public URL Render gives you (it is also the link for your streaming
+   device or browser source), go to the **Live** tab, and paste your Euler
+   Stream API key into the key box the first time you connect.
+
+Render's free plan wipes the server's files whenever it restarts or redeploys,
+so a key saved on the server can disappear. That is fine: the key is also
+remembered in the browser you pasted it in, and fills itself back in.
+If you would rather set it once on the server, add `EULERSTREAM_API_KEY` under
+Environment in Render and leave the key box empty.
 
 ## 3. The word database
 
@@ -165,7 +195,7 @@ never shown on stream. Add your own lines any time.
 ```
 server.js                  game logic, word checking, TikTok connection
 package.json               dependencies and scripts
-.env.example  .gitignore
+.env.example  .gitignore   (optional settings; the key box in the Live tab replaces them)
 public/                    what the browser loads
   index.html  style.css  game.js
 data/
@@ -177,6 +207,7 @@ data/
   secret-exclude.txt       words kept out of secret slots
   rounds.json              the 40 rounds
   settings.json            saved Settings-panel values (created automatically)
+  secrets.json             your saved Euler Stream key (created automatically, never uploaded)
 scripts/
   build-dictionary.js      builds words-full.txt
   build-rounds.js          builds rounds.json

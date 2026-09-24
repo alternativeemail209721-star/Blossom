@@ -32,6 +32,59 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const DICTIONARY_GOAL = 400000;
 
+// ---------------- EULER STREAM API KEY ----------------
+// LIVE mode needs a (free) Euler Stream API key. The host can paste it into the
+// Live tab of the game screen — no .env file or server settings required.
+// Where the key can come from (first one found wins):
+//   1. the key box in the Live tab (kept for next time in data/secrets.json)
+//   2. data/secrets.json (saved from an earlier connect)
+//   3. the EULERSTREAM_API_KEY environment variable (.env file or Render settings)
+// The key itself is NEVER sent back to any browser — screens only learn
+// whether a key exists (see publicState).
+const SECRETS_FILE = path.join(DATA_DIR, 'secrets.json');
+
+function cleanApiKey(raw) {
+  let k = String(raw || '').trim();
+  k = k.replace(/^EULERSTREAM_API_KEY\s*=\s*/i, '').trim();   // someone pasted the whole ".env" line
+  k = k.replace(/^["'`]+|["'`]+$/g, '').trim();               // ...or pasted it with quotes
+  return k;
+}
+function isPlausibleApiKey(k) {
+  return k.length >= 8 && k.length <= 300 && !/\s/.test(k);
+}
+
+let savedApiKey = '';
+try {
+  savedApiKey = cleanApiKey(JSON.parse(fs.readFileSync(SECRETS_FILE, 'utf8')).eulerApiKey);
+} catch (e) { /* nothing saved yet */ }
+const envApiKey = cleanApiKey(process.env.EULERSTREAM_API_KEY);
+
+function getApiKey() { return savedApiKey || envApiKey || ''; }
+function apiKeySource() { return savedApiKey ? 'saved' : (envApiKey ? 'env' : null); }
+
+function saveApiKey(key) {
+  savedApiKey = key;
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(SECRETS_FILE, JSON.stringify({ eulerApiKey: key }), { mode: 0o600 });
+  } catch (e) {
+    console.error('Could not save data/secrets.json (the key still works until the server restarts):', e.message);
+  }
+}
+function forgetApiKey() {
+  savedApiKey = '';
+  try { fs.unlinkSync(SECRETS_FILE); } catch (e) { /* already gone */ }
+}
+
+// Safety net: make sure a key can never leak into an error message or a log line.
+function redactKeys(text, extraKey) {
+  let out = String(text || '');
+  [savedApiKey, envApiKey, extraKey].forEach(function (k) {
+    if (k && k.length >= 8) out = out.split(k).join('***');
+  });
+  return out;
+}
+
 function readLines(file) {
   try {
     return fs.readFileSync(file, 'utf8').split(/\r?\n/);
@@ -289,6 +342,8 @@ function publicState() {
     recentGuesses: state.recentGuesses.slice(0, s.recentFeedSize),
     liveUsername: state.liveUsername,
     liveConnected: state.liveConnected,
+    hasApiKey: !!getApiKey(),
+    apiKeySource: apiKeySource(),
     rawEventCount: state.rawEventCount,
     lastReceived: state.lastReceived,
     settings: s
@@ -447,12 +502,23 @@ function stopLive() {
   broadcastState();
 }
 
-function startLive(username) {
+function startLive(username, typedKey) {
   if (!WebcastPushConnection) {
     return Promise.reject(new Error('tiktok-live-connector is not installed.'));
   }
-  if (!process.env.EULERSTREAM_API_KEY) {
-    return Promise.reject(new Error('Missing EULERSTREAM_API_KEY. Get one free at https://www.eulerstream.com and put it in your .env file.'));
+
+  // A key typed into the Live tab wins; otherwise use the saved / environment key.
+  const typed = cleanApiKey(typedKey);
+  if (typed && !isPlausibleApiKey(typed)) {
+    const bad = new Error('That does not look like an Euler Stream API key. Copy it again from https://www.eulerstream.com (no spaces).');
+    bad.needsKey = true;
+    return Promise.reject(bad);
+  }
+  const apiKey = typed || getApiKey();
+  if (!apiKey) {
+    const missing = new Error('Paste your Euler Stream API key into the key box first. It is free: https://www.eulerstream.com');
+    missing.needsKey = true;
+    return Promise.reject(missing);
   }
 
   username = String(username || '').trim().replace(/^@+/, '');   // people often type "@name"
@@ -477,7 +543,7 @@ function startLive(username) {
         // see exactly what TikTok is sending if something looks wrong.
         let loggedSample = false;
         tiktokConnection = new WebcastPushConnection(username, {
-          signApiKey: process.env.EULERSTREAM_API_KEY
+          signApiKey: apiKey
         });
 
         tiktokConnection.on('chat', function (data) {
@@ -504,7 +570,7 @@ function startLive(username) {
         });
 
         tiktokConnection.on('error', function (err) {
-          console.error('TikTok connection error:', err && err.message ? err.message : err);
+          console.error('TikTok connection error:', redactKeys(err && err.message ? err.message : err, apiKey));
         });
 
         tiktokConnection.connect()
@@ -514,6 +580,7 @@ function startLive(username) {
               return reject(new Error('Connection cancelled.'));
             }
             state.liveConnected = true;
+            if (typed && typed !== savedApiKey) saveApiKey(typed);   // it worked: keep it for next time
             broadcastState();
             resolve(connState);
           })
@@ -530,7 +597,7 @@ function startLive(username) {
       liveRetryCount += 1;
       if (liveRetryCount <= MAX_LIVE_RETRIES) {
         const delay = 1500 * liveRetryCount;
-        console.warn('Live connect attempt ' + liveRetryCount + ' failed, retrying in ' + delay + 'ms: ' + (err && err.message ? err.message : err));
+        console.warn('Live connect attempt ' + liveRetryCount + ' failed, retrying in ' + delay + 'ms: ' + redactKeys(err && err.message ? err.message : err, apiKey));
         return new Promise(function (resolve, reject) {
           setTimeout(function () {
             tryWithRetries().then(resolve).catch(reject);
@@ -555,14 +622,27 @@ function startLive(username) {
 
 // ---------------- ROUTES ----------------
 app.post('/api/start-live', async function (req, res) {
+  const typedKey = (req.body && req.body.apiKey) || '';
   try {
     const username = ((req.body && req.body.username) || '').trim();
     if (!username) return res.status(400).json({ ok: false, error: 'username required' });
-    await startLive(username);
+    await startLive(username, typedKey);
     res.json({ ok: true, state: publicState() });
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message || String(err) });
+    res.status(err && err.needsKey ? 400 : 500).json({
+      ok: false,
+      needsKey: !!(err && err.needsKey),
+      error: redactKeys(err && err.message ? err.message : String(err), cleanApiKey(typedKey))
+    });
   }
+});
+
+// Removes the key saved on the server. (A key set through the EULERSTREAM_API_KEY
+// environment variable is not touched — that one is managed in your host settings.)
+app.post('/api/forget-api-key', function (req, res) {
+  forgetApiKey();
+  broadcastState();
+  res.json({ ok: true, hasApiKey: !!getApiKey(), apiKeySource: apiKeySource() });
 });
 
 app.post('/api/stop-live', function (req, res) {
