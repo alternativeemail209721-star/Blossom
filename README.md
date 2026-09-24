@@ -35,15 +35,18 @@ change their size, from Settings.
 
 ## The live guess feed
 
-A docked panel sits **directly below the instructions and above the seven
-letters**. It has its own fixed-height slot in the page, so it never overlaps
-the instructions or the letter board. It shows **exactly one guess at a time**:
-the viewer's circular profile picture, their name, the word they guessed, and
-the points they earned (for example `+3 pts`). Each guess fades out after a few
-seconds, then the next queued guess (if any) fades in. From Settings you can
-toggle it, set how many seconds each guess stays visible, and cap how many can
-be queued up if guesses arrive faster than they can be shown. It stays visible
-in the clean "Hide controls" stream view too.
+A reserved slot sits **directly below the instructions and above the seven
+letters**, so nothing else is ever allowed to move into that space and the
+instructions and letter board never shift or get covered. The slot itself is
+never painted — no box, no background — it's just empty page unless a guess
+is showing. When a guess comes in, a small floating chip (the viewer's
+circular profile picture, their name, the word they guessed, and the points
+they earned, e.g. `+3 pts`) pops up out of that empty space, hovers for a few
+seconds, then floats back down and away before the next queued guess pops up.
+Exactly **one guess is shown at a time**. From Settings you can toggle the
+feed, set how many seconds each guess stays visible, and cap how many can be
+queued up if guesses arrive faster than they can be shown. It stays visible in
+the clean "Hide controls" stream view too.
 
 ## Settings panel
 
