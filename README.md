@@ -1,62 +1,100 @@
-# Blossom TikTok LIVE Game — Deployment-Ready
+# Blossom LIVE — mochi edition
 
-This folder is a complete, working game. Push it to GitHub and deploy it
-on Render.com.
+A word game for TikTok LIVE chat. Seven cute mochi friends hold the letters
+(the one with the bow is the **center letter**). Viewers type words in chat.
 
-## 1. Run it on your own computer first (recommended)
+This one folder is everything: game, word database, and deploy settings.
 
-1. Install Node.js from https://nodejs.org if you have not already.
-2. Open a terminal in this folder.
-3. Run: `npm install`
-4. Copy `.env.example` to `.env` and, if you want LIVE mode, paste in a
-   free API key from https://www.eulerstream.com.
-5. Run: `npm start`
-6. Open http://localhost:3000 in your browser.
+## How the game works
 
-You can fully play the game in **Offline** and **Test** mode without any
-API key at all.
+- Each round shows 7 letters. Every word must be **4+ letters**, use only those
+  letters (repeats allowed), and **include the center letter**.
+- There are **20 secret words** per round, each 4 to 8 letters long. The screen
+  tells viewers how long they are: a colored chip per length ("5 letters 2/6")
+  and a number badge plus one dot per letter on every unfound slot.
+  A ★ marks a word that uses all 7 letters (15 points).
+- **Any other real English word** from the word database is accepted as a
+  **bonus word** for half points. Bonus words do not fill slots.
+- Points by length: 4 letters = 1, 5 = 3, 6 = 5, 7+ = 8, all-7-letters = 15.
+- Find all 20 secret words to win the round; the next round starts on its own.
+  There are 40 rounds and the game loops.
 
-## 2. Deploy to Render.com
+## 1. Try it on your computer
 
-1. Create a free GitHub account if you don't have one, and push this
-   folder to a new GitHub repository (GitHub Desktop is the easiest way
-   if you are not comfortable with the command line).
-2. Go to https://render.com, sign up, and choose "New +" -> "Web
-   Service".
-3. Connect your GitHub repository.
-4. Settings:
-   - Build Command: `npm install`
-   - Start Command: `npm start`
-5. Under "Environment", add an environment variable named
-   `EULERSTREAM_API_KEY` with your key (only needed for Live mode).
-6. Click "Create Web Service". Render will give you a public URL — that
-   is the link you open on your streaming device/browser source.
+1. Install Node.js from https://nodejs.org (version 18 or newer).
+2. Open a terminal in this folder and run: `npm install`
+   (this also builds the big word database, see below)
+3. Copy `.env.example` to `.env`. For LIVE mode, paste a free key from
+   https://www.eulerstream.com after `EULERSTREAM_API_KEY=`.
+4. Run: `npm start` and open http://localhost:3000
 
-## 3. Getting a TikTok LIVE signing key (for Live mode)
+Offline and Test mode work without any key.
+Files starting with a dot (`.env.example`, `.gitignore`) are hidden on
+Windows/Mac. They are in the folder; that is normal.
 
-1. Go to https://www.eulerstream.com and create a free account.
-2. Create an API key.
-3. Put it in the `EULERSTREAM_API_KEY` environment variable (locally in
-   `.env`, or in Render's Environment settings).
+## 2. Deploy on Render.com
 
-Without this key, Live mode will show a clear on-screen error, but
-Offline and Test modes always work.
+1. Push this folder to a new GitHub repository (GitHub Desktop is easiest).
+2. On https://render.com choose New + > Web Service and connect the repository.
+3. Build Command: `npm install`   Start Command: `npm start`
+4. Environment: add `EULERSTREAM_API_KEY` (only needed for Live mode).
+5. Deploy. The public URL Render gives you is the link for your streaming
+   device or browser source.
 
-## 4. How the game works
+## 3. The word database
 
-- 10 rounds are hardcoded in `rounds.js`. Each round has 7 letters, 1
-  center letter, and exactly 20 accepted words.
-- The audience (or you, in Offline mode) types words in chat. Words must
-  be 4+ letters, use only the 7 shown letters, and include the center
-  letter.
-- Finding all 20 words triggers a celebration and the next round loads
-  automatically after a few seconds, looping back to round 1 after the
-  10th round.
-- Longer words and pangrams (words using all 7 letters) score more
-  points. The Top 10 leaderboard tracks total points per viewer.
+The game checks every guess against a Set of real words.
 
-## 5. If you want to change something later
+- `data/words-base.txt` is bundled: about 111,000 everyday English words
+  (expanded from the Hunspell en_US dictionary, including plurals, past tenses
+  and -ing forms).
+- Each time you run `npm install` (also on Render), `scripts/build-dictionary.js`
+  downloads large public word lists, merges them with the bundled list and
+  your own words, removes blocked words, and saves `data/words-full.txt`.
+  It prints the final count, for example `Word database ready: 385,000 words`.
+  The same count is shown at the bottom of the game screen ("Word database").
+- If a download fails, the game still starts with the words it has.
+- The target is 400,000+. If your count is lower, add words to
+  `data/extra-words.txt` (one per line) or add more list links in
+  `scripts/build-dictionary.js`, then run `npm run build-words` (or redeploy).
 
-Use the `2_Source_For_Future_Upgrades` folder instead of this one — it
-is split into small, heavily-commented files. Upload the relevant
-file(s) back to Claude and describe the change you want.
+Good to know: standard Scrabble dictionaries have roughly 180,000 to 280,000
+words. Going past 400,000 means including rare, old and technical words, and
+some entries in the giant public lists are not everyday English.
+
+### Blocked words
+
+`data/blocked-words.txt` lists profanity and slurs. They are never accepted and
+never shown on stream. Add your own lines any time.
+
+## 4. Changing rounds
+
+- `data/rounds.json` holds the 40 rounds (7 letters, center letter, 20 secret
+  words each). `npm run build-rounds` rebuilds them from `data/common-words.txt`
+  (everyday words only, so secret words are guessable). Add `60` after the
+  command for more rounds: `node scripts/build-rounds.js 60`.
+- To ban a word from being a secret word (it still works as a bonus word), add
+  it to `data/secret-exclude.txt` and rebuild.
+
+## Folder map
+
+```
+server.js                  game logic, word checking, TikTok connection
+package.json               dependencies and scripts
+.env.example  .gitignore
+public/                    what the browser loads
+  index.html  style.css  game.js
+data/
+  words-base.txt           bundled word list
+  words-full.txt           built on install (big list)
+  extra-words.txt          your words
+  blocked-words.txt        never accepted
+  common-words.txt         pool for secret words
+  secret-exclude.txt       words kept out of secret slots
+  rounds.json              the 40 rounds
+scripts/
+  build-dictionary.js      builds words-full.txt
+  build-rounds.js          builds rounds.json
+```
+
+Thanks: the bundled list comes from Hunspell's en_US dictionary (SCOWL).

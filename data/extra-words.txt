@@ -1,0 +1,3 @@
+# Your own extra words go here, one per line, lowercase, letters only.
+# Lines starting with # are ignored. After editing, run:  npm run build-words
+# (or just redeploy — the word database is rebuilt automatically on install).

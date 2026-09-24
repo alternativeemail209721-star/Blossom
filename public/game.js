@@ -1,4 +1,9 @@
-// viewport.js — fixes mobile browsers reporting the wrong 100vh
+// game.js — everything the browser page does.
+// Sections: viewport fix, socket, mochi board, secret-word slots, length chips,
+// bonus words, leaderboard, diagnostics, toast + celebration, modes,
+// offline/test/host controls, and the socket event wiring at the bottom.
+
+// viewport — fixes mobile browsers reporting the wrong 100vh
 function setViewportHeight() {
   document.documentElement.style.setProperty('--vh', (window.innerHeight * 0.01) + 'px');
 }
@@ -6,89 +11,190 @@ setViewportHeight();
 window.addEventListener('resize', setViewportHeight);
 window.addEventListener('orientationchange', setViewportHeight);
 
-// socketClient.js — connects to the server and dispatches events
+const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// socket — connects to the server
 const socket = io();
 
-// flower.js — renders the 7-letter Blossom flower (1 center + 6 petals)
-function renderFlower(letters, center) {
+// ---------------- MOCHI BOARD (7 letters: 1 center + 6 friends) ----------------
+const MOCHI_COLORS = ['mint', 'lavender', 'peach', 'sky', 'butter', 'bubble'];
+let boardKey = '';
+
+function makeMochi(letter, colorClass, delay) {
+  const el = document.createElement('div');
+  el.className = 'mochi ' + colorClass;
+  el.style.setProperty('--d', delay + 's');
+  el.innerHTML =
+    '<span class="ground"></span>' +
+    '<div class="body">' +
+      '<i class="eye l"></i><i class="eye r"></i>' +
+      '<i class="cheek l"></i><i class="cheek r"></i>' +
+      '<i class="mouth"></i>' +
+      '<b class="ch"></b>' +
+    '</div>';
+  el.querySelector('.ch').textContent = letter;
+  return el;
+}
+
+function renderBoard(letters, center) {
+  const key = letters.join('') + center;
+  if (key === boardKey) return;   // same letters: keep the animations running
+  boardKey = key;
+
   const flowerEl = document.getElementById('flower');
   flowerEl.innerHTML = '';
 
-  const petals = letters.filter(function (l) { return l !== center; });
-  const radius = 34; // percent of the flower box
-  const cx = 50, cy = 50;
+  const friends = letters.filter(function (l) { return l !== center; });
+  const ring = 33;      // distance from the middle, in % of the board
+  const size = 28;      // size of each friend, in % of the board
 
-  petals.forEach(function (letter, i) {
-    const angle = (Math.PI * 2 * i) / petals.length - Math.PI / 2;
-    const x = cx + radius * Math.cos(angle);
-    const y = cy + radius * Math.sin(angle);
-    const el = document.createElement('div');
-    el.className = 'petal';
-    el.style.left = (x - 15) + '%';
-    el.style.top = (y - 15) + '%';
-    el.textContent = letter;
+  friends.forEach(function (letter, i) {
+    const angle = (Math.PI * 2 * i) / friends.length - Math.PI / 2;
+    const x = 50 + ring * Math.cos(angle);
+    const y = 50 + ring * Math.sin(angle);
+    const el = makeMochi(letter, MOCHI_COLORS[i % MOCHI_COLORS.length], (i * 0.45).toFixed(2));
+    el.style.width = size + '%';
+    el.style.height = size + '%';
+    el.style.left = (x - size / 2) + '%';
+    el.style.top = (y - size / 2) + '%';
     flowerEl.appendChild(el);
   });
 
-  const centerEl = document.createElement('div');
-  centerEl.className = 'center-letter';
-  centerEl.textContent = center;
-  flowerEl.appendChild(centerEl);
-
-  document.getElementById('centerCallout').textContent = 'center letter (' + center + ')';
+  const mid = makeMochi(center, 'center', 0.2);
+  mid.style.width = '34%';
+  mid.style.height = '34%';
+  mid.style.left = '33%';
+  mid.style.top = '33%';
+  const bow = document.createElement('div');
+  bow.className = 'bow';
+  bow.innerHTML = '<i></i><i></i><b></b>';
+  mid.appendChild(bow);
+  flowerEl.appendChild(mid);
 }
 
-// slots.js — renders the 20 word slots; slots fill in the order words are found
-function renderSlots(slotsTotal, foundWords) {
+// every mochi does a happy squish when a word is found
+function boingBoard() {
+  if (reduceMotion) return;
+  const bodies = document.querySelectorAll('#flower .body');
+  bodies.forEach(function (b, i) {
+    b.classList.remove('boing');
+    void b.offsetWidth; // restart the animation
+    b.style.animationDelay = (i * 0.04) + 's';
+    b.classList.add('boing');
+  });
+}
+
+// ---------------- RULES + PROGRESS ----------------
+function renderRules(s) {
+  document.getElementById('centerCallout').textContent = s.center;
+  document.getElementById('slotsTotalText').textContent = s.slotsTotal;
+  document.getElementById('slotsTotalText2').textContent = s.slotsTotal;
+  document.getElementById('lenRange').textContent = s.minLen === s.maxLen ? String(s.minLen) : (s.minLen + ' to ' + s.maxLen);
+  document.getElementById('foundCount').textContent = s.foundCount;
+  document.getElementById('progressFill').style.width = (s.slotsTotal ? (100 * s.foundCount / s.slotsTotal) : 0) + '%';
+}
+
+// ---------------- LENGTH CHIPS: "how long are the secret words?" ----------------
+function renderLengthChips(s) {
+  const el = document.getElementById('lengthChips');
+  el.innerHTML = '';
+  s.lengthSummary.forEach(function (row) {
+    let found = 0;
+    s.slots.forEach(function (sl) { if (sl.len === row.len && sl.word) found++; });
+    const chip = document.createElement('span');
+    chip.className = 'chip len-' + row.len + (found === row.count ? ' done' : '');
+    chip.innerHTML = '<b>' + row.len + '</b> letters <span>' + found + '/' + row.count + '</span>';
+    el.appendChild(chip);
+  });
+  if (s.slots.some(function (sl) { return sl.pangram; })) {
+    const star = document.createElement('span');
+    star.className = 'chip star';
+    star.textContent = '\u2605 uses all 7 letters';
+    el.appendChild(star);
+  }
+}
+
+// ---------------- SECRET WORD SLOTS ----------------
+// Each slot is one secret word. Until it is found it only shows how many
+// letters it has (a badge number + one dot per letter).
+function renderSlots(slots) {
   const slotsEl = document.getElementById('slots');
-  const prevCount = slotsEl.children.length;
-  if (prevCount !== slotsTotal) {
+
+  if (slotsEl.children.length !== slots.length) {
     slotsEl.innerHTML = '';
-    for (let i = 0; i < slotsTotal; i++) {
+    slots.forEach(function () {
       const s = document.createElement('div');
       s.className = 'slot';
+      s.innerHTML = '<span class="badge"></span><span class="dots"></span><span class="word"></span>';
       slotsEl.appendChild(s);
-    }
+    });
   }
-  const children = slotsEl.children;
-  for (let i = 0; i < children.length; i++) {
-    const entry = foundWords[i];
-    if (entry) {
-      children[i].textContent = entry.word;
-      children[i].classList.add('found');
-    } else {
-      children[i].textContent = '';
-      children[i].classList.remove('found');
+
+  slots.forEach(function (slot, i) {
+    const el = slotsEl.children[i];
+    const found = slot.word || '';
+    const prevFound = el.dataset.word || '';
+    const prevLen = el.dataset.len || '';
+
+    if (String(slot.len) !== prevLen) {
+      el.dataset.len = String(slot.len);
+      el.querySelector('.badge').textContent = slot.len;
+      const dots = el.querySelector('.dots');
+      dots.innerHTML = '';
+      for (let d = 0; d < slot.len; d++) dots.appendChild(document.createElement('i'));
+      el.setAttribute('aria-label', slot.len + ' letter secret word');
     }
-  }
+
+    el.className = 'slot len-' + slot.len + (slot.pangram ? ' pangram' : '') + (found ? ' found' : '');
+    el.querySelector('.word').textContent = found;
+
+    if (found && found !== prevFound && !reduceMotion) {
+      el.classList.add('pop');
+    }
+    el.dataset.word = found;
+  });
 }
 
-// leaderboard.js — renders the Top 10 high scores list
+// ---------------- BONUS WORDS ----------------
+function renderBonus(count, recent) {
+  document.getElementById('bonusCount').textContent = count;
+  const list = document.getElementById('bonusList');
+  list.innerHTML = '';
+  recent.forEach(function (b) {
+    const chip = document.createElement('span');
+    chip.textContent = b.word;
+    chip.title = b.by;
+    list.appendChild(chip);
+  });
+}
+
+// ---------------- LEADERBOARD ----------------
 function renderLeaderboard(entries) {
   const el = document.getElementById('leaderboard');
   el.innerHTML = '';
   entries.forEach(function (row) {
     const li = document.createElement('li');
-    li.textContent = row.user + ' — ' + row.points + ' pts';
+    li.textContent = row.user + ' \u2014 ' + row.points + ' pts';
     el.appendChild(li);
   });
 }
 
-// diagnostics.js — on-screen debug readout so a non-coder can see events arriving
-function renderDiagnostics(rawEventCount, lastReceived, liveConnected, liveUsername) {
+// ---------------- DIAGNOSTICS ----------------
+function renderDiagnostics(rawEventCount, lastReceived, liveConnected, liveUsername, dictionarySize) {
   document.getElementById('rawCount').textContent = rawEventCount;
   document.getElementById('lastReceived').textContent = lastReceived
     ? (lastReceived.user + ': ' + lastReceived.text)
     : '(none yet)';
+  document.getElementById('dictSize').textContent = Number(dictionarySize || 0).toLocaleString();
   const liveStatusEl = document.getElementById('liveStatus');
   if (liveUsername) {
-    liveStatusEl.textContent = 'Live target: @' + liveUsername + ' — ' + (liveConnected ? 'connected' : 'not connected');
+    liveStatusEl.textContent = 'Live target: @' + liveUsername + ' \u2014 ' + (liveConnected ? 'connected' : 'not connected');
   } else {
     liveStatusEl.textContent = '';
   }
 }
 
-// toastCelebration.js — small popup for hints/points + the round-complete overlay
+// ---------------- TOAST + CELEBRATION ----------------
 let toastTimer = null;
 function showToast(message) {
   const el = document.getElementById('toast');
@@ -97,18 +203,36 @@ function showToast(message) {
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(function () {
     el.classList.add('hidden');
-  }, 2200);
+  }, 2400);
 }
 
+function launchConfetti() {
+  if (reduceMotion) return;
+  const box = document.getElementById('confetti');
+  box.innerHTML = '';
+  const colors = ['#ff6fae', '#ffd75e', '#8ee6c8', '#8ed2ff', '#c9b6ff', '#ffb58a'];
+  for (let i = 0; i < 44; i++) {
+    const bit = document.createElement('i');
+    bit.style.left = (Math.random() * 100) + '%';
+    bit.style.background = colors[i % colors.length];
+    bit.style.animationDuration = (2.2 + Math.random() * 2) + 's';
+    bit.style.animationDelay = (Math.random() * 0.8) + 's';
+    box.appendChild(bit);
+  }
+}
+
+let celebrationTimer = null;
 function showCelebration() {
   const el = document.getElementById('celebration');
   el.classList.remove('hidden');
-  setTimeout(function () {
+  launchConfetti();
+  if (celebrationTimer) clearTimeout(celebrationTimer);
+  celebrationTimer = setTimeout(function () {
     el.classList.add('hidden');
   }, 4500);
 }
 
-// modes.js — Offline / Test / Live mode switching
+// ---------------- MODES (Offline / Test / Live) ----------------
 let currentMode = 'offline';
 
 function setActiveModeButton(mode) {
@@ -156,9 +280,7 @@ document.getElementById('liveDisconnectBtn').addEventListener('click', function 
   fetch('/api/stop-live', { method: 'POST' }).catch(function (err) { console.error(err); });
 });
 
-// offlineTest.js — Offline manual-guess box + Test mode simulate buttons
-let lastKnownRound = null;
-
+// ---------------- OFFLINE + TEST CONTROLS ----------------
 document.getElementById('offlineSubmit').addEventListener('click', function () {
   const input = document.getElementById('offlineInput');
   if (!input.value.trim()) return;
@@ -169,13 +291,9 @@ document.getElementById('offlineInput').addEventListener('keydown', function (e)
   if (e.key === 'Enter') document.getElementById('offlineSubmit').click();
 });
 
+// The server picks a random unfound secret word and "types" it as a fake viewer.
 document.getElementById('testAutoBtn').addEventListener('click', function () {
-  if (!lastKnownRound) return;
-  const remaining = lastKnownRound.remainingWords || [];
-  if (!remaining.length) { showToast('No words left to simulate'); return; }
-  const word = remaining[Math.floor(Math.random() * remaining.length)];
-  const fakeUser = 'TestViewer' + Math.floor(Math.random() * 999);
-  socket.emit('guess', { text: word, user: fakeUser });
+  socket.emit('hostAction', { type: 'simulate' });
 });
 
 document.getElementById('testCustomBtn').addEventListener('click', function () {
@@ -185,8 +303,11 @@ document.getElementById('testCustomBtn').addEventListener('click', function () {
   socket.emit('guess', { text: input.value, user: fakeUser });
   input.value = '';
 });
+document.getElementById('testCustomInput').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') document.getElementById('testCustomBtn').click();
+});
 
-// hostControls.js — lets the streamer type/override comments directly on screen
+// ---------------- HOST CONTROLS ----------------
 document.getElementById('hostSubmit').addEventListener('click', function () {
   const input = document.getElementById('hostInput');
   if (!input.value.trim()) return;
@@ -205,26 +326,31 @@ document.getElementById('hostHint').addEventListener('click', function () {
   socket.emit('hostAction', { type: 'hint' });
 });
 
-// main.js — wires all socket events to the render functions above
+// ---------------- SOCKET EVENTS ----------------
+let currentCenter = '';
+
 socket.on('state', function (s) {
   currentMode = s.mode;
+  currentCenter = s.center;
   setActiveModeButton(s.mode);
   document.getElementById('roundNumber').textContent = s.roundNumber;
   document.getElementById('roundTotal').textContent = s.totalRounds;
-  renderFlower(s.letters, s.center);
-  renderSlots(s.slotsTotal, s.foundWords);
+  renderBoard(s.letters, s.center);
+  renderRules(s);
+  renderLengthChips(s);
+  renderSlots(s.slots);
+  renderBonus(s.bonusCount, s.bonusRecent);
   renderLeaderboard(s.leaderboard);
-  renderDiagnostics(s.rawEventCount, s.lastReceived, s.liveConnected, s.liveUsername);
-
-  const foundSet = new Set(s.foundWords.map(function (f) { return f.word; }));
-  lastKnownRound = { remainingWords: [] };
-  // remainingWords is filled in from the round word list on the server in a
-  // future upgrade if you want Test Mode to always guess a truly valid word;
-  // for now Test Mode also works by typing any text into the custom box.
+  renderDiagnostics(s.rawEventCount, s.lastReceived, s.liveConnected, s.liveUsername, s.dictionarySize);
 });
 
 socket.on('wordFound', function (data) {
-  showToast(data.user + ' found ' + data.word + ' (+' + data.points + ')');
+  boingBoard();
+  if (data.secret) {
+    showToast(data.user + ' found ' + data.word + ' (+' + data.points + ')');
+  } else {
+    showToast('Bonus! ' + data.user + ' found ' + data.word + ' (+' + data.points + ')');
+  }
 });
 
 socket.on('roundComplete', function () {
@@ -232,11 +358,29 @@ socket.on('roundComplete', function () {
 });
 
 socket.on('newRound', function () {
+  document.getElementById('celebration').classList.add('hidden');
   showToast('New round!');
 });
 
 socket.on('hint', function (data) {
   showToast('Hint: starts with ' + data.letter + ', ' + data.length + ' letters');
+});
+
+socket.on('notice', function (data) {
+  showToast(data.message);
+});
+
+// Explains why a typed guess was not accepted (chat guesses stay silent).
+socket.on('guessRejected', function (data) {
+  const word = data.word || '';
+  const messages = {
+    tooShort: 'Words need at least 4 letters',
+    alreadyFound: word + ' was already found',
+    wrongLetters: 'Use only the 7 letters on the board',
+    missingCenter: 'Every word must use the center letter (' + currentCenter + ')',
+    notAWord: word + ' is not in the dictionary'
+  };
+  showToast(messages[data.reason] || 'Guess not accepted');
 });
 
 socket.on('diagnostics', function (data) {

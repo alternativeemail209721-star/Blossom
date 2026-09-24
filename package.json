@@ -1,11 +1,14 @@
 {
   "name": "blossom-tiktok-live",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Blossom-style word game for TikTok LIVE audiences.",
+  "description": "Blossom-style word game for TikTok LIVE audiences, with a 3D mochi board and a big word database.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "postinstall": "node scripts/build-dictionary.js",
+    "build-words": "node scripts/build-dictionary.js",
+    "build-rounds": "node scripts/build-rounds.js"
   },
   "engines": {
     "node": ">=18.0.0"

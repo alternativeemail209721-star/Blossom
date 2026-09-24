@@ -1,12 +1,13 @@
 // server.js — Blossom TikTok LIVE Game Server
-// This single file wires together the web server, the game logic, and
-// the TikTok LIVE connection. Run with: npm install && npm start
+// This single file wires together the web server, the game logic, the word
+// database, and the TikTok LIVE connection.
+// Run with: npm install && npm start
 require('dotenv').config();
+const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const ROUNDS = require('./rounds.js');
 
 let WebcastPushConnection = null;
 try {
@@ -24,12 +25,98 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
 
+// ---------------- WORD DATABASE ----------------
+// Any word in this database is accepted as a valid guess (as long as it uses
+// the round's letters and the center letter). The list is built by
+// scripts/build-dictionary.js — see README.md.
+const DATA_DIR = path.join(__dirname, 'data');
+const MIN_WORD_LENGTH = 4;
+const DICTIONARY_GOAL = 400000;
+
+function readLines(file) {
+  try {
+    return fs.readFileSync(file, 'utf8').split(/\r?\n/);
+  } catch (e) {
+    return [];
+  }
+}
+
+const blocked = new Set(
+  readLines(path.join(DATA_DIR, 'blocked-words.txt'))
+    .map(function (l) { return l.trim().toLowerCase(); })
+    .filter(function (l) { return l && l[0] !== '#'; })
+);
+
+const dictionary = new Set();
+
+function loadDictionary() {
+  ['words-base.txt', 'words-full.txt', 'extra-words.txt'].forEach(function (name) {
+    const lines = readLines(path.join(DATA_DIR, name));
+    for (let i = 0; i < lines.length; i++) {
+      const w = lines[i].trim().toLowerCase();
+      if (w.length >= MIN_WORD_LENGTH && /^[a-z]+$/.test(w) && !blocked.has(w)) dictionary.add(w);
+    }
+  });
+}
+loadDictionary();
+
+// ---------------- ROUNDS ----------------
+// Each round: 7 letters, 1 center letter, and 20 SECRET words that fill the
+// board. Every other real word from the dictionary is a BONUS word.
+function isPangram(word, letters) {
+  const wset = new Set(word.split(''));
+  for (const l of letters) { if (!wset.has(l)) return false; }
+  return true;
+}
+
+function loadRounds() {
+  let raw = [];
+  try {
+    raw = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'rounds.json'), 'utf8'));
+  } catch (e) {
+    console.error('Could not read data/rounds.json — run "npm run build-rounds".', e.message);
+  }
+  return raw.map(function (r) {
+    const letters = (r.letters || []).map(function (l) { return String(l).toUpperCase(); });
+    const center = String(r.center || '').toUpperCase();
+    const letterSet = new Set(letters);
+    const seen = new Set();
+    const words = [];
+    (r.words || []).forEach(function (w) {
+      const word = String(w).toUpperCase().replace(/[^A-Z]/g, '');
+      if (word.length < MIN_WORD_LENGTH || seen.has(word)) return;
+      if (blocked.has(word.toLowerCase())) return;
+      if (word.indexOf(center) === -1) return;
+      for (const ch of word) { if (!letterSet.has(ch)) return; }
+      seen.add(word);
+      words.push(word);
+      dictionary.add(word.toLowerCase()); // secret words are always accepted
+    });
+    words.sort(function (a, b) { return a.length - b.length || (a < b ? -1 : 1); });
+    const pangrams = new Set(words.filter(function (w) { return isPangram(w, letters); }));
+    return { letters: letters, center: center, letterSet: letterSet, words: words, wordSet: new Set(words), pangrams: pangrams };
+  }).filter(function (r) { return r.letters.length === 7 && r.words.length > 0; });
+}
+
+const ROUNDS = loadRounds();
+if (!ROUNDS.length) {
+  console.error('No usable rounds found in data/rounds.json. Run "npm run build-rounds" and restart.');
+  process.exit(1);
+}
+
+console.log('Word database: ' + dictionary.size.toLocaleString() + ' words loaded (' + blocked.size + ' words on the blocked list are never accepted).');
+if (dictionary.size < DICTIONARY_GOAL) {
+  console.log('NOTE: that is under ' + DICTIONARY_GOAL.toLocaleString() + ' words. Run "npm run build-words" with internet access to download the big lists (see README.md).');
+}
+console.log('Rounds loaded: ' + ROUNDS.length);
+
 // ---------------- GAME STATE ----------------
 const state = {
   mode: 'offline', // 'offline' | 'test' | 'live'
   roundIndex: 0,
-  foundWords: [],
-  foundBy: {},
+  foundSecret: new Map(), // SECRET WORD -> who found it
+  bonusWords: [],         // [{ word, by }] valid dictionary words that are not secret words
+  usedWords: new Set(),   // every word already found this round (secret + bonus)
   scores: {},
   rawEventCount: 0,
   lastReceived: null,
@@ -44,13 +131,6 @@ function currentRound() {
 function cleanGuess(text) {
   if (!text) return '';
   return String(text).toUpperCase().replace(/[^A-Z]/g, '');
-}
-
-function isPangram(word, letters) {
-  const set = new Set(letters);
-  const wset = new Set(word.split(''));
-  for (const l of set) { if (!wset.has(l)) return false; }
-  return true;
 }
 
 function scoreForWord(word, letters) {
@@ -71,6 +151,23 @@ function topScores(n) {
 
 function publicState() {
   const round = currentRound();
+
+  // One slot per secret word. Unfound slots only reveal how long the word is.
+  const slots = round.words.map(function (w) {
+    const slot = { len: w.length, pangram: round.pangrams.has(w) };
+    if (state.foundSecret.has(w)) {
+      slot.word = w;
+      slot.by = state.foundSecret.get(w);
+    }
+    return slot;
+  });
+
+  const lengthCounts = {};
+  round.words.forEach(function (w) { lengthCounts[w.length] = (lengthCounts[w.length] || 0) + 1; });
+  const lengthSummary = Object.keys(lengthCounts)
+    .map(function (k) { return { len: Number(k), count: lengthCounts[k] }; })
+    .sort(function (a, b) { return a.len - b.len; });
+
   return {
     mode: state.mode,
     roundNumber: (state.roundIndex % ROUNDS.length) + 1,
@@ -78,9 +175,14 @@ function publicState() {
     letters: round.letters,
     center: round.center,
     slotsTotal: round.words.length,
-    foundWords: state.foundWords.map(function (w) {
-      return { word: w, by: state.foundBy[w] || '' };
-    }),
+    slots: slots,
+    lengthSummary: lengthSummary,
+    minLen: round.words[0].length,
+    maxLen: round.words[round.words.length - 1].length,
+    foundCount: state.foundSecret.size,
+    bonusCount: state.bonusWords.length,
+    bonusRecent: state.bonusWords.slice(-8),
+    dictionarySize: dictionary.size,
     leaderboard: topScores(10),
     liveUsername: state.liveUsername,
     liveConnected: state.liveConnected,
@@ -94,19 +196,28 @@ function broadcastState() {
 }
 
 function resetRoundState() {
-  state.foundWords = [];
-  state.foundBy = {};
+  state.foundSecret = new Map();
+  state.bonusWords = [];
+  state.usedWords = new Set();
 }
 
+let advancingRound = false;
+let roundTimer = null;
+
 function nextRound() {
+  if (roundTimer) { clearTimeout(roundTimer); roundTimer = null; }
+  advancingRound = false;
   state.roundIndex = (state.roundIndex + 1) % ROUNDS.length;
   resetRoundState();
   io.emit('newRound', publicState());
 }
 
-let advancingRound = false;
-
-function handleGuess(rawText, user) {
+// onReject (optional) is called with (reason, word) when a guess is not accepted.
+// Chat guesses stay silent; the on-screen guess boxes use it to explain why.
+function handleGuess(rawText, user, onReject) {
+  function reject(reason, word) {
+    if (typeof onReject === 'function') onReject(reason, word);
+  }
   try {
     state.rawEventCount += 1;
     state.lastReceived = { user: user || 'Unknown', text: rawText || '' };
@@ -114,32 +225,40 @@ function handleGuess(rawText, user) {
 
     const round = currentRound();
     const guess = cleanGuess(rawText);
-    if (!guess || guess.length < 4) return;
-    if (state.foundWords.indexOf(guess) !== -1) return;
-    if (round.words.indexOf(guess) === -1) return;
+    if (!guess || guess.length < MIN_WORD_LENGTH) return reject('tooShort', guess);
+    if (state.usedWords.has(guess)) return reject('alreadyFound', guess);
 
-    const allowed = new Set(round.letters);
-    for (const ch of guess) { if (!allowed.has(ch)) return; }
-    if (guess.indexOf(round.center) === -1) return;
+    for (const ch of guess) { if (!round.letterSet.has(ch)) return reject('wrongLetters', guess); }
+    if (guess.indexOf(round.center) === -1) return reject('missingCenter', guess);
 
-    const points = scoreForWord(guess, round.letters);
+    const isSecret = round.wordSet.has(guess);
+    if (!isSecret && !dictionary.has(guess.toLowerCase())) return reject('notAWord', guess);
+
     const who = user || 'Unknown';
-    state.foundWords.push(guess);
-    state.foundBy[guess] = who;
+    let points = scoreForWord(guess, round.letters);
+    if (!isSecret) points = Math.ceil(points / 2); // bonus words are worth half
+
+    state.usedWords.add(guess);
+    if (isSecret) {
+      state.foundSecret.set(guess, who);
+    } else {
+      state.bonusWords.push({ word: guess, by: who });
+    }
     state.scores[who] = (state.scores[who] || 0) + points;
 
     io.emit('wordFound', {
-      word: guess, user: who, points: points,
-      found: state.foundWords.length, total: round.words.length
+      word: guess, user: who, points: points, secret: isSecret,
+      found: state.foundSecret.size, total: round.words.length,
+      bonusCount: state.bonusWords.length
     });
     broadcastState();
 
-    if (state.foundWords.length >= round.words.length && !advancingRound) {
+    if (isSecret && state.foundSecret.size >= round.words.length && !advancingRound) {
       advancingRound = true;
       io.emit('roundComplete', publicState());
-      setTimeout(function () {
+      roundTimer = setTimeout(function () {
+        roundTimer = null;
         nextRound();
-        advancingRound = false;
       }, 5000);
     }
   } catch (err) {
@@ -294,22 +413,31 @@ io.on('connection', function (socket) {
   socket.on('guess', function (payload) {
     const text = payload && payload.text;
     const user = (payload && payload.user) || 'Player';
-    handleGuess(text, user);
+    handleGuess(text, user, function (reason, word) {
+      socket.emit('guessRejected', { reason: reason, word: word });
+    });
   });
 
   socket.on('hostAction', function (payload) {
     try {
       if (!payload || !payload.type) return;
+      const round = currentRound();
+      const remaining = round.words.filter(function (w) { return !state.foundSecret.has(w); });
+
       if (payload.type === 'skipRound') {
         nextRound();
       } else if (payload.type === 'hint') {
-        const round = currentRound();
-        const remaining = round.words.filter(function (w) {
-          return state.foundWords.indexOf(w) === -1;
-        });
         if (remaining.length) {
           const pick = remaining[Math.floor(Math.random() * remaining.length)];
           socket.emit('hint', { letter: pick[0], length: pick.length });
+        }
+      } else if (payload.type === 'simulate') {
+        // Test mode: pretend a random viewer just typed one of the secret words.
+        if (!remaining.length) {
+          socket.emit('notice', { message: 'No secret words left to simulate' });
+        } else {
+          const pick = remaining[Math.floor(Math.random() * remaining.length)];
+          handleGuess(pick, 'TestViewer' + Math.floor(Math.random() * 999));
         }
       } else if (payload.type === 'overrideReveal') {
         handleGuess(payload.word, 'Host');

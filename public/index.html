@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Blossom LIVE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -18,14 +21,29 @@
   </div>
 
   <div id="rulesLegend">
-    Type words using these letters! Must include the <span id="centerCallout">center letter</span>. Find 20 words!
+    Type words made from these letters. Every word must use the center letter
+    (<span id="centerCallout">?</span>).
+    Find the <span id="slotsTotalText">20</span> secret words, each
+    <span id="lenRange">4 to 8</span> letters long!
   </div>
 
   <div id="roundInfo">Round <span id="roundNumber">1</span> / <span id="roundTotal">10</span></div>
 
-  <div id="flower"></div>
+  <div id="flower" aria-label="Today's letters"></div>
+
+  <div id="progress">
+    <div id="progressText"><span id="foundCount">0</span> of <span id="slotsTotalText2">20</span> secret words found</div>
+    <div id="progressTrack"><div id="progressFill"></div></div>
+  </div>
+
+  <div id="lengthChips" aria-label="Secret word lengths"></div>
 
   <div id="slots"></div>
+
+  <div id="bonusWrap">
+    <div id="bonusTitle">Bonus words <span id="bonusCount">0</span> <small>(any other real word, half points)</small></div>
+    <div id="bonusList"></div>
+  </div>
 
   <div id="leaderboardWrap">
     <h3>Top 10</h3>
@@ -35,6 +53,7 @@
   <div id="diagnostics">
     <div>All Raw Events: <span id="rawCount">0</span></div>
     <div>Last Received: <span id="lastReceived">(none yet)</span></div>
+    <div>Word database: <span id="dictSize">0</span> words</div>
     <div id="liveStatus"></div>
   </div>
 
@@ -58,7 +77,7 @@
     </div>
 
     <div id="hostPanel" class="panel">
-      <div class="hostTitle">Host Controls</div>
+      <div class="hostTitle">Host controls</div>
       <input id="hostInput" type="text" placeholder="Type/override a comment as host..." autocomplete="off" />
       <button id="hostSubmit">Submit</button>
       <button id="hostSkip">Skip Round</button>
@@ -70,6 +89,7 @@
 </div>
 
 <div id="celebration" class="hidden">
+  <div id="confetti"></div>
   <div id="celebrationText">Round Complete!</div>
 </div>
 
