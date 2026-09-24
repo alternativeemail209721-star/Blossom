@@ -527,18 +527,38 @@ let liveRetryCount = 0;
 let liveToken = 0;            // bumped on every connect/disconnect so stale retries stop
 const MAX_LIVE_RETRIES = 3;
 
+// Finds the viewer's real TikTok profile picture URL in whatever shape the
+// event arrives in. Prefers a URL the browser can actually display (jpeg/png/
+// webp) over .heic, which most browsers cannot render.
+function pickAvatarUrl(data) {
+  if (!data) return null;
+  const candidates = [];
+  function add(v) {
+    if (!v) return;
+    if (typeof v === 'string') candidates.push(v);
+    else if (Array.isArray(v)) v.forEach(add);
+    else if (typeof v === 'object') { add(v.urlList); add(v.urls); add(v.url); }
+  }
+  const u = data.user || {};
+  const d = data.userDetails || {};
+  add(data.profilePictureUrl); add(u.profilePictureUrl);
+  add(d.profilePictureUrls); add(d.profilePictureUrl);
+  add(u.profilePicture); add(data.profilePicture);
+  add(u.avatarThumb); add(data.avatarThumb);
+  add(u.avatarMedium); add(data.avatarMedium);
+  add(u.avatarLarger); add(data.avatarLarger);
+  const urls = candidates.filter(function (x) { return typeof x === 'string' && /^https?:\/\//i.test(x); });
+  if (!urls.length) return null;
+  const displayable = urls.filter(function (x) { return !/\.heic(\?|$)/i.test(x); });
+  return (displayable[0] || urls[0]);
+}
+
 function extractChat(data) {
   // Fallback chain, because the exact field names have shifted between
   // library versions and TikTok payload variants.
   const user = (data && (data.uniqueId || (data.user && data.user.uniqueId) || data.nickname)) || 'Unknown';
   const text = (data && (data.comment || data.text || data.content)) || '';
-  const avatar = (data && (
-    data.profilePictureUrl ||
-    (data.user && data.user.profilePictureUrl) ||
-    (data.user && data.user.avatarThumb && data.user.avatarThumb.urlList && data.user.avatarThumb.urlList[0]) ||
-    (data.avatarThumb && data.avatarThumb.urlList && data.avatarThumb.urlList[0]) ||
-    (data.avatarLarger && data.avatarLarger.urlList && data.avatarLarger.urlList[0])
-  )) || null;
+  const avatar = pickAvatarUrl(data);
   return { user: user, text: text, avatar: avatar };
 }
 

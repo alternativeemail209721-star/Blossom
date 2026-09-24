@@ -35,15 +35,15 @@ change their size, from Settings.
 
 ## The live guess feed
 
-A small docked panel — sitting right below the instructions and above the
-seven letters — shows **one guess at a time**: avatar, name, the word, and
-the points earned. Each guess fades out a few seconds after it appears, then
-the next one (if any came in while it was showing) fades in. It collapses
-to almost nothing when there's nothing to show, so the letters and secret
-word boxes below it are always fully visible. From Settings you can toggle
-it, set how many seconds each guess stays visible, and cap how many can be
-queued up if guesses arrive faster than they can be shown (older ones are
-dropped).
+A docked panel sits **directly below the instructions and above the seven
+letters**. It has its own fixed-height slot in the page, so it never overlaps
+the instructions or the letter board. It shows **exactly one guess at a time**:
+the viewer's circular profile picture, their name, the word they guessed, and
+the points they earned (for example `+3 pts`). Each guess fades out after a few
+seconds, then the next queued guess (if any) fades in. From Settings you can
+toggle it, set how many seconds each guess stays visible, and cap how many can
+be queued up if guesses arrive faster than they can be shown. It stays visible
+in the clean "Hide controls" stream view too.
 
 ## Settings panel
 
@@ -80,6 +80,13 @@ database actually contains shorter words — the bundled `words-base.txt`
 starts at 4 letters. Add 3-letter words to `data/extra-words.txt` (or run
 `npm run build-words` with internet access) if you want 3-letter guesses
 to be accepted.
+
+## Leaderboard button
+
+A trophy button in the top toolbar (or press **L**) opens a full leaderboard
+window: switch between **This Round** and **All-Time**, see every viewer's
+avatar and points, reset this round or the all-time board (with confirmation),
+or export the CSV. Press **Esc** to close it.
 
 ## Extra host controls
 

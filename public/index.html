@@ -21,6 +21,7 @@
     <button class="modeBtn" data-mode="test">Test</button>
     <button class="modeBtn" data-mode="live">Live</button>
     <span id="modeLabel">OFFLINE</span>
+    <button id="leaderboardBtn" class="iconBtn" type="button" title="Leaderboard (L)" aria-label="Open leaderboard">&#127942;</button>
     <button id="settingsBtn" class="iconBtn" type="button" title="Settings" aria-label="Open settings">&#9881;</button>
     <button id="hideBtn" class="iconBtn" type="button" title="Hide controls (H)" aria-label="Hide controls">&#128065;</button>
     <button id="fsBtn" class="iconBtn" type="button" title="Fullscreen (F)" aria-label="Enter fullscreen">&#9974;</button>
@@ -34,12 +35,10 @@
       words, <span id="lenRange">4–8</span> letters long!
     </div>
 
-    <div id="roundInfo">Round <span id="roundNumber">1</span></div>
-
-    <!-- Docked live guess feed: sits below the instructions and above the
-         letters (not a floating overlay). Shows one guess at a time and
-         collapses to almost nothing when empty, so it never covers the
-         board or pushes it off screen. -->
+    <!-- Docked live guess feed: sits in normal page flow directly below the
+         instructions and above the letters. It owns a fixed-height slot, so
+         it can never overlap either neighbour. Exactly one guess (avatar,
+         name, word, points) is shown at a time. -->
     <div id="liveFeedPanel" aria-label="Live guess feed">
       <div id="liveFeedList"></div>
     </div>
@@ -136,6 +135,26 @@
 </div>
 
 <div id="toast" class="hidden" role="status" aria-live="polite"></div>
+
+<!-- ---------------- LEADERBOARD MODAL ---------------- -->
+<div id="lbOverlay" class="hidden">
+  <div id="lbModal" role="dialog" aria-label="Leaderboard">
+    <div id="lbModalHeader">
+      <h2>&#127942; Leaderboard <small id="lbModalViewLabel">This Round</small></h2>
+      <button id="lbCloseBtn" type="button" aria-label="Close leaderboard">&times;</button>
+    </div>
+    <div id="lbModalToggle" role="group" aria-label="Leaderboard view">
+      <button type="button" class="lbViewBtn active" data-view="round">This Round</button>
+      <button type="button" class="lbViewBtn" data-view="allTime">All-Time</button>
+    </div>
+    <ol id="lbModalList"></ol>
+    <div id="lbModalActions">
+      <button id="lbResetRoundBtn" type="button">Reset This Round</button>
+      <button id="lbResetAllBtn" type="button">Reset All-Time</button>
+      <button id="lbExportBtn" type="button">Export CSV</button>
+    </div>
+  </div>
+</div>
 
 <!-- ---------------- SETTINGS MODAL ---------------- -->
 <div id="settingsOverlay" class="hidden">

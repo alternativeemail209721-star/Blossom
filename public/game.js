@@ -1,6 +1,6 @@
 // game.js — everything the browser page does.
 // Sections: viewport fix, socket, avatars, mochi board, secret-word slots,
-// length chips, bonus words, leaderboard, live feed, diagnostics, toast +
+// length chips, bonus words, leaderboard, live feed, leaderboard modal, diagnostics, toast +
 // celebration, sound effects, settings panel, modes, fullscreen + hide
 // controls, offline/test/host controls, and the socket event wiring at the
 // bottom.
@@ -159,6 +159,8 @@ function renderRules(s) {
 
 // ---------------- LENGTH CHIPS: "how long are the secret words?" ----------------
 function renderLengthChips(s) {
+  // One row, never scrolls: every chip shares the row equally and stacks a
+  // tiny "N letters" caption above its found/total count.
   const el = document.getElementById('lengthChips');
   el.innerHTML = '';
   s.lengthSummary.forEach(function (row) {
@@ -166,13 +168,15 @@ function renderLengthChips(s) {
     s.slots.forEach(function (sl) { if (sl.len === row.len && sl.word) found++; });
     const chip = document.createElement('span');
     chip.className = 'chip len-' + row.len + (found === row.count ? ' done' : '');
-    chip.innerHTML = '<b>' + row.len + '</b> letters <span>' + found + '/' + row.count + '</span>';
+    chip.title = row.len + '-letter secret words: ' + found + ' of ' + row.count + ' found';
+    chip.innerHTML = '<em><b>' + row.len + '</b> letters</em><span>' + found + '/' + row.count + '</span>';
     el.appendChild(chip);
   });
   if (s.slots.some(function (sl) { return sl.pangram; })) {
     const star = document.createElement('span');
     star.className = 'chip star';
-    star.textContent = '\u2605 uses all 7 letters';
+    star.title = 'A secret word that uses all 7 letters';
+    star.innerHTML = '<em>all 7</em><span>\u2605</span>';
     el.appendChild(star);
   }
 }
@@ -253,13 +257,7 @@ function currentLeaderboardEntries() {
   return leaderboardView === 'allTime' ? lastAllTimeLeaderboard : lastRoundLeaderboard;
 }
 
-function renderLeaderboard(entries) {
-  document.getElementById('leaderboardSizeLabel').textContent = settings.leaderboardSize;
-  document.getElementById('leaderboardViewLabel').textContent = leaderboardView === 'allTime' ? 'All-Time' : 'This Round';
-  document.querySelectorAll('.lbViewBtn').forEach(function (btn) {
-    btn.classList.toggle('active', btn.dataset.view === leaderboardView);
-  });
-  const el = document.getElementById('leaderboard');
+function fillLeaderboardList(el, entries) {
   el.innerHTML = '';
   if (!entries.length) {
     const empty = document.createElement('li');
@@ -287,6 +285,18 @@ function renderLeaderboard(entries) {
   });
 }
 
+function renderLeaderboard(entries) {
+  const viewName = leaderboardView === 'allTime' ? 'All-Time' : 'This Round';
+  document.getElementById('leaderboardSizeLabel').textContent = settings.leaderboardSize;
+  document.getElementById('leaderboardViewLabel').textContent = viewName;
+  document.getElementById('lbModalViewLabel').textContent = viewName;
+  document.querySelectorAll('.lbViewBtn').forEach(function (btn) {
+    btn.classList.toggle('active', btn.dataset.view === leaderboardView);
+  });
+  fillLeaderboardList(document.getElementById('leaderboard'), entries);
+  fillLeaderboardList(document.getElementById('lbModalList'), entries);
+}
+
 // ---------------- LIVE GUESS FEED (docked, one at a time) ----------------
 // Only ever one guess is shown, in the docked panel between the instructions
 // and the letters. New guesses queue up (oldest dropped first if the queue
@@ -307,7 +317,7 @@ function queueFeedItem(row) {
 function renderFeedRow(row) {
   const panel = document.getElementById('liveFeedPanel');
   const list = document.getElementById('liveFeedList');
-  list.innerHTML = '';
+  list.innerHTML = '';                 // guarantees only ONE guess exists at a time
   panel.classList.add('has-item');
   const item = document.createElement('div');
   item.className = 'feedRow' + (row.secret ? '' : ' bonus');
@@ -322,7 +332,7 @@ function renderFeedRow(row) {
   item.appendChild(word);
   const pts = document.createElement('span');
   pts.className = 'feedPts';
-  pts.textContent = '+' + row.points;
+  pts.textContent = '+' + row.points + (row.points === 1 ? ' pt' : ' pts');
   item.appendChild(pts);
   list.appendChild(item);
   return item;
@@ -337,21 +347,16 @@ function processFeedQueue() {
   if (feedHideTimer) clearTimeout(feedHideTimer);
   feedHideTimer = setTimeout(function () {
     const panel = document.getElementById('liveFeedPanel');
-    if (reduceMotion) {
+    function finish() {
       el.remove();
       panel.classList.remove('has-item');
       feedShowing = false;
+      feedHideTimer = null;
       processFeedQueue();
-      return;
     }
+    if (reduceMotion) { finish(); return; }
     el.classList.add('feedOut');
-    el.addEventListener('animationend', function onEnd() {
-      el.removeEventListener('animationend', onEnd);
-      el.remove();
-      panel.classList.remove('has-item');
-      feedShowing = false;
-      processFeedQueue();
-    });
+    feedHideTimer = setTimeout(finish, 360);   // matches the 0.35s fade-out
   }, duration);
 }
 
@@ -665,12 +670,13 @@ function setControlsHidden(hidden) {
 document.getElementById('hideBtn').addEventListener('click', function () { setControlsHidden(true); });
 document.getElementById('showControlsBtn').addEventListener('click', function () { setControlsHidden(false); });
 
-// Keyboard: F = fullscreen, H = hide/show controls (ignored while typing).
+// Keyboard: F = fullscreen, H = hide/show controls, L = leaderboard (ignored while typing).
 document.addEventListener('keydown', function (e) {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
   const k = (e.key || '').toLowerCase();
+  if (k === 'l') { e.preventDefault(); if (lbOverlay.classList.contains('hidden')) openLeaderboard(); else closeLeaderboard(); return; }
   if (k === 'f') { e.preventDefault(); toggleFullscreen(); }
   else if (k === 'h') { e.preventDefault(); setControlsHidden(!rootEl.classList.contains('hide-controls')); }
 });
@@ -768,6 +774,21 @@ document.querySelectorAll('.lbViewBtn').forEach(function (btn) {
   });
 });
 
+// ---------------- LEADERBOARD MODAL (top toolbar trophy button) ----------------
+const lbOverlay = document.getElementById('lbOverlay');
+function openLeaderboard() {
+  renderLeaderboard(currentLeaderboardEntries());
+  lbOverlay.classList.remove('hidden');
+}
+function closeLeaderboard() { lbOverlay.classList.add('hidden'); }
+document.getElementById('leaderboardBtn').addEventListener('click', openLeaderboard);
+document.getElementById('lbCloseBtn').addEventListener('click', closeLeaderboard);
+lbOverlay.addEventListener('click', function (e) { if (e.target === lbOverlay) closeLeaderboard(); });
+// the modal's action buttons reuse the host-panel handlers (same confirmations)
+document.getElementById('lbResetRoundBtn').addEventListener('click', function () { document.getElementById('hostResetRound').click(); });
+document.getElementById('lbResetAllBtn').addEventListener('click', function () { document.getElementById('hostReset').click(); });
+document.getElementById('lbExportBtn').addEventListener('click', function () { document.getElementById('hostExport').click(); });
+
 // ---------------- TEST MODE: AUTO-ANSWER BOT TOGGLE ----------------
 document.getElementById('testAutoBotBtn').addEventListener('click', function () {
   if (!ensureConnected()) return;
@@ -818,6 +839,7 @@ function populateSettingsForm() {
 
 function applySettingsToDom() {
   document.documentElement.setAttribute('data-theme', settings.theme || 'candy');
+  document.documentElement.setAttribute('data-avatar', settings.avatarSize || 'medium');
   document.documentElement.classList.toggle('hide-avatars', !settings.showAvatars);
   document.documentElement.classList.toggle('no-board-anim', !settings.boardAnimationEnabled);
   document.documentElement.classList.toggle('compact', !!settings.compactMode);
@@ -870,6 +892,13 @@ settingsOverlay.addEventListener('click', function (e) {
   if (e.target === settingsOverlay) settingsOverlay.classList.add('hidden');
 });
 
+// Escape closes whichever modal is open
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Escape') return;
+  lbOverlay.classList.add('hidden');
+  settingsOverlay.classList.add('hidden');
+});
+
 // ---------------- SOCKET EVENTS ----------------
 let currentCenter = '';
 
@@ -886,7 +915,6 @@ function applyState(s) {
   // Stay on the Live tab while the person is typing a username, even if other
   // screens cause a state update in the meantime.
   setActiveModeButton(liveTabOpen ? 'live' : s.mode);
-  document.getElementById('roundNumber').textContent = s.roundNumber;
   renderBoard(s.letters, s.center);
   renderRules(s);
   renderLengthChips(s);
