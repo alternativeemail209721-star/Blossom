@@ -30,7 +30,6 @@ const PORT = process.env.PORT || 3000;
 // the round's letters and the center letter). The list is built by
 // scripts/build-dictionary.js — see README.md.
 const DATA_DIR = path.join(__dirname, 'data');
-const MIN_WORD_LENGTH = 4;
 const DICTIONARY_GOAL = 400000;
 
 function readLines(file) {
@@ -54,11 +53,100 @@ function loadDictionary() {
     const lines = readLines(path.join(DATA_DIR, name));
     for (let i = 0; i < lines.length; i++) {
       const w = lines[i].trim().toLowerCase();
-      if (w.length >= MIN_WORD_LENGTH && /^[a-z]+$/.test(w) && !blocked.has(w)) dictionary.add(w);
+      if (w.length >= 3 && /^[a-z]+$/.test(w) && !blocked.has(w)) dictionary.add(w);
     }
   });
 }
 loadDictionary();
+
+// ---------------- SETTINGS ----------------
+// Everything here is fully customizable by the host from the in-game Settings
+// panel. Changes are broadcast to every connected screen instantly and saved
+// to data/settings.json so they survive a server restart.
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+
+const DEFAULT_SETTINGS = {
+  // Appearance
+  theme: 'candy',                 // candy | mint | sunset | ocean | midnight
+  showAvatars: true,
+  avatarSize: 'medium',           // small | medium | large
+  boardAnimationEnabled: true,
+  confettiEnabled: true,
+  compactMode: false,
+  showDiagnostics: true,
+  // Live feed & leaderboard
+  showRecentFeed: true,
+  recentFeedSize: 12,
+  leaderboardSize: 10,
+  // Gameplay
+  bonusWordsEnabled: true,
+  pointsMultiplier: 1,
+  minGuessLength: 4,
+  hintCooldownMs: 8000,
+  hintDurationMs: 5000,
+  skipCooldownMs: 600,
+  autoAdvanceDelayMs: 5000,
+  paused: false,
+  // Sound
+  soundEnabled: true,
+  soundVolume: 0.5
+};
+
+const SETTINGS_LIMITS = {
+  recentFeedSize: [1, 50],
+  leaderboardSize: [3, 30],
+  pointsMultiplier: [0.25, 5],
+  minGuessLength: [3, 7],
+  hintCooldownMs: [0, 60000],
+  hintDurationMs: [1000, 15000],
+  skipCooldownMs: [0, 5000],
+  autoAdvanceDelayMs: [1000, 20000],
+  soundVolume: [0, 1]
+};
+const THEME_OPTIONS = ['candy', 'mint', 'sunset', 'ocean', 'midnight'];
+const AVATAR_SIZES = ['small', 'medium', 'large'];
+
+function clampNum(n, range, fallback) {
+  const v = Number(n);
+  if (!isFinite(v)) return fallback;
+  return Math.min(range[1], Math.max(range[0], v));
+}
+
+function loadSettings() {
+  let saved = {};
+  try {
+    saved = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+  } catch (e) { /* no saved settings yet — use defaults */ }
+  return sanitizeSettings(Object.assign({}, DEFAULT_SETTINGS, saved));
+}
+
+function sanitizeSettings(input) {
+  const out = Object.assign({}, DEFAULT_SETTINGS);
+  Object.keys(DEFAULT_SETTINGS).forEach(function (key) {
+    if (!(key in input)) return;
+    const val = input[key];
+    if (typeof DEFAULT_SETTINGS[key] === 'boolean') {
+      out[key] = !!val;
+    } else if (SETTINGS_LIMITS[key]) {
+      out[key] = clampNum(val, SETTINGS_LIMITS[key], DEFAULT_SETTINGS[key]);
+    } else if (key === 'theme') {
+      out[key] = THEME_OPTIONS.indexOf(val) !== -1 ? val : DEFAULT_SETTINGS.theme;
+    } else if (key === 'avatarSize') {
+      out[key] = AVATAR_SIZES.indexOf(val) !== -1 ? val : DEFAULT_SETTINGS.avatarSize;
+    } else {
+      out[key] = val;
+    }
+  });
+  return out;
+}
+
+function saveSettings() {
+  try {
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(state.settings, null, 2));
+  } catch (e) {
+    console.error('Could not save data/settings.json:', e.message);
+  }
+}
 
 // ---------------- ROUNDS ----------------
 // Each round: 7 letters, 1 center letter, and 20 SECRET words that fill the
@@ -84,7 +172,7 @@ function loadRounds() {
     const words = [];
     (r.words || []).forEach(function (w) {
       const word = String(w).toUpperCase().replace(/[^A-Z]/g, '');
-      if (word.length < MIN_WORD_LENGTH || seen.has(word)) return;
+      if (word.length < 3 || seen.has(word)) return;
       if (blocked.has(word.toLowerCase())) return;
       if (word.indexOf(center) === -1) return;
       for (const ch of word) { if (!letterSet.has(ch)) return; }
@@ -114,15 +202,21 @@ console.log('Rounds loaded: ' + ROUNDS.length);
 const state = {
   mode: 'offline', // 'offline' | 'test' | 'live'
   roundIndex: 0,
-  foundSecret: new Map(), // SECRET WORD -> who found it
-  bonusWords: [],         // [{ word, by }] valid dictionary words that are not secret words
-  usedWords: new Set(),   // every word already found this round (secret + bonus)
-  scores: {},
+  foundSecret: new Map(),   // SECRET WORD -> who found it
+  bonusWords: [],           // [{ word, by, avatar }] valid dictionary words that are not secret words
+  usedWords: new Set(),     // every word already found this round (secret + bonus)
+  scores: {},               // username -> points
+  userAvatars: {},          // username -> avatar URL (real TikTok avatar, when known)
+  recentGuesses: [],        // newest first: [{ user, word, points, secret, avatar, ts }]
   rawEventCount: 0,
   lastReceived: null,
   liveUsername: null,
-  liveConnected: false
+  liveConnected: false,
+  lastHintAt: 0,
+  settings: loadSettings()
 };
+
+const MAX_RECENT_GUESSES = 60;
 
 function currentRound() {
   return ROUNDS[state.roundIndex % ROUNDS.length];
@@ -142,15 +236,20 @@ function scoreForWord(word, letters) {
   return 8;
 }
 
+function avatarFor(user) {
+  return state.userAvatars[user] || null;
+}
+
 function topScores(n) {
   return Object.entries(state.scores)
-    .map(function (e) { return { user: e[0], points: e[1] }; })
+    .map(function (e) { return { user: e[0], points: e[1], avatar: avatarFor(e[0]) }; })
     .sort(function (a, b) { return b.points - a.points; })
     .slice(0, n);
 }
 
 function publicState() {
   const round = currentRound();
+  const s = state.settings;
 
   // One slot per secret word. Unfound slots only reveal how long the word is.
   const slots = round.words.map(function (w) {
@@ -158,6 +257,7 @@ function publicState() {
     if (state.foundSecret.has(w)) {
       slot.word = w;
       slot.by = state.foundSecret.get(w);
+      slot.avatar = avatarFor(slot.by);
     }
     return slot;
   });
@@ -183,11 +283,13 @@ function publicState() {
     bonusCount: state.bonusWords.length,
     bonusRecent: state.bonusWords.slice(-8),
     dictionarySize: dictionary.size,
-    leaderboard: topScores(10),
+    leaderboard: topScores(s.leaderboardSize),
+    recentGuesses: state.recentGuesses.slice(0, s.recentFeedSize),
     liveUsername: state.liveUsername,
     liveConnected: state.liveConnected,
     rawEventCount: state.rawEventCount,
-    lastReceived: state.lastReceived
+    lastReceived: state.lastReceived,
+    settings: s
   };
 }
 
@@ -206,8 +308,6 @@ let roundTimer = null;
 let lastAdvanceAt = 0;
 
 // Moves to the next round and tells EVERY connected screen about it.
-// (Earlier versions only sent a 'newRound' event and never the new state,
-// so the browser kept showing the old round: that was the broken Skip button.)
 function nextRound() {
   if (roundTimer) { clearTimeout(roundTimer); roundTimer = null; }
   advancingRound = false;
@@ -218,51 +318,84 @@ function nextRound() {
   broadcastState();
 }
 
-// Host "skip": ignores a second press within a moment so a double-click
-// cannot skip two rounds by accident. Returns true if it skipped.
-const SKIP_COOLDOWN_MS = 600;
+// Host "skip": ignores a second press within a moment (cooldown is a
+// customizable setting) so a double-click cannot skip two rounds by accident.
 function skipRound() {
-  if (Date.now() - lastAdvanceAt < SKIP_COOLDOWN_MS) return false;
+  if (Date.now() - lastAdvanceAt < state.settings.skipCooldownMs) return false;
   nextRound();
   return true;
 }
 
+function gotoRound(oneBasedIndex) {
+  const n = ROUNDS.length;
+  let idx = Math.floor(Number(oneBasedIndex)) - 1;
+  if (!isFinite(idx)) return false;
+  idx = ((idx % n) + n) % n;
+  if (roundTimer) { clearTimeout(roundTimer); roundTimer = null; }
+  advancingRound = false;
+  lastAdvanceAt = Date.now();
+  state.roundIndex = idx;
+  resetRoundState();
+  io.emit('newRound', publicState());
+  broadcastState();
+  return true;
+}
+
+function resetScores() {
+  state.scores = {};
+  state.recentGuesses = [];
+  broadcastState();
+}
+
 // onReject (optional) is called with (reason, word) when a guess is not accepted.
 // Chat guesses stay silent; the on-screen guess boxes use it to explain why.
-function handleGuess(rawText, user, onReject) {
+function handleGuess(rawText, user, avatar, onReject) {
   function reject(reason, word) {
     if (typeof onReject === 'function') onReject(reason, word);
   }
   try {
+    const who = user || 'Unknown';
+    if (avatar) state.userAvatars[who] = avatar;
+
     state.rawEventCount += 1;
-    state.lastReceived = { user: user || 'Unknown', text: rawText || '' };
+    state.lastReceived = { user: who, text: rawText || '' };
     io.emit('diagnostics', { rawEventCount: state.rawEventCount, lastReceived: state.lastReceived });
+
+    if (state.settings.paused) return reject('paused', '');
 
     const round = currentRound();
     const guess = cleanGuess(rawText);
-    if (!guess || guess.length < MIN_WORD_LENGTH) return reject('tooShort', guess);
+    const minLen = state.settings.minGuessLength;
+    if (!guess || guess.length < minLen) return reject('tooShort', guess);
     if (state.usedWords.has(guess)) return reject('alreadyFound', guess);
 
     for (const ch of guess) { if (!round.letterSet.has(ch)) return reject('wrongLetters', guess); }
     if (guess.indexOf(round.center) === -1) return reject('missingCenter', guess);
 
     const isSecret = round.wordSet.has(guess);
+    if (!isSecret && !state.settings.bonusWordsEnabled) return reject('bonusDisabled', guess);
     if (!isSecret && !dictionary.has(guess.toLowerCase())) return reject('notAWord', guess);
 
-    const who = user || 'Unknown';
     let points = scoreForWord(guess, round.letters);
     if (!isSecret) points = Math.ceil(points / 2); // bonus words are worth half
+    points = Math.max(1, Math.round(points * state.settings.pointsMultiplier));
 
     state.usedWords.add(guess);
     if (isSecret) {
       state.foundSecret.set(guess, who);
     } else {
-      state.bonusWords.push({ word: guess, by: who });
+      state.bonusWords.push({ word: guess, by: who, avatar: avatarFor(who) });
     }
     state.scores[who] = (state.scores[who] || 0) + points;
 
+    state.recentGuesses.unshift({
+      user: who, word: guess, points: points, secret: isSecret,
+      avatar: avatarFor(who), ts: Date.now()
+    });
+    if (state.recentGuesses.length > MAX_RECENT_GUESSES) state.recentGuesses.length = MAX_RECENT_GUESSES;
+
     io.emit('wordFound', {
-      word: guess, user: who, points: points, secret: isSecret,
+      word: guess, user: who, points: points, secret: isSecret, avatar: avatarFor(who),
       found: state.foundSecret.size, total: round.words.length,
       bonusCount: state.bonusWords.length
     });
@@ -274,7 +407,7 @@ function handleGuess(rawText, user, onReject) {
       roundTimer = setTimeout(function () {
         roundTimer = null;
         nextRound();
-      }, 5000);
+      }, state.settings.autoAdvanceDelayMs);
     }
   } catch (err) {
     console.error('handleGuess error:', err);
@@ -292,7 +425,14 @@ function extractChat(data) {
   // library versions and TikTok payload variants.
   const user = (data && (data.uniqueId || (data.user && data.user.uniqueId) || data.nickname)) || 'Unknown';
   const text = (data && (data.comment || data.text || data.content)) || '';
-  return { user: user, text: text };
+  const avatar = (data && (
+    data.profilePictureUrl ||
+    (data.user && data.user.profilePictureUrl) ||
+    (data.user && data.user.avatarThumb && data.user.avatarThumb.urlList && data.user.avatarThumb.urlList[0]) ||
+    (data.avatarThumb && data.avatarThumb.urlList && data.avatarThumb.urlList[0]) ||
+    (data.avatarLarger && data.avatarLarger.urlList && data.avatarLarger.urlList[0])
+  )) || null;
+  return { user: user, text: text, avatar: avatar };
 }
 
 function stopLive() {
@@ -345,7 +485,7 @@ function startLive(username) {
               console.log('Sample raw chat event shape:', JSON.stringify(data).slice(0, 500));
             }
             const parsed = extractChat(data);
-            handleGuess(parsed.text, parsed.user);
+            handleGuess(parsed.text, parsed.user, parsed.avatar);
           } catch (err) {
             console.error('Error handling chat event:', err);
           }
@@ -446,6 +586,33 @@ app.post('/api/skip-round', function (req, res) {
   res.json({ ok: true, skipped: skipped, state: publicState() });
 });
 
+app.get('/api/settings', function (req, res) {
+  res.json({ ok: true, settings: state.settings });
+});
+
+app.post('/api/settings', function (req, res) {
+  state.settings = sanitizeSettings(Object.assign({}, state.settings, req.body || {}));
+  saveSettings();
+  broadcastState();
+  res.json({ ok: true, settings: state.settings });
+});
+
+// A simple CSV export of the current leaderboard, for hosts who want to keep
+// a record of a session's winners (e.g. for giveaways).
+app.get('/api/export-leaderboard', function (req, res) {
+  const rows = Object.entries(state.scores)
+    .map(function (e) { return { user: e[0], points: e[1] }; })
+    .sort(function (a, b) { return b.points - a.points; });
+  let csv = 'rank,user,points\n';
+  rows.forEach(function (r, i) {
+    const safeUser = '"' + String(r.user).replace(/"/g, '""') + '"';
+    csv += (i + 1) + ',' + safeUser + ',' + r.points + '\n';
+  });
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="leaderboard.csv"');
+  res.send(csv);
+});
+
 // Simple health check (handy for Render).
 app.get('/healthz', function (req, res) {
   res.json({ ok: true, round: state.roundIndex + 1, words: dictionary.size });
@@ -458,7 +625,8 @@ io.on('connection', function (socket) {
   socket.on('guess', function (payload) {
     const text = payload && payload.text;
     const user = (payload && payload.user) || 'Player';
-    handleGuess(text, user, function (reason, word) {
+    const avatar = (payload && payload.avatar) || null;
+    handleGuess(text, user, avatar, function (reason, word) {
       socket.emit('guessRejected', { reason: reason, word: word });
     });
   });
@@ -471,11 +639,24 @@ io.on('connection', function (socket) {
 
       if (payload.type === 'skipRound') {
         skipRound();
+      } else if (payload.type === 'gotoRound') {
+        gotoRound(payload.index);
+      } else if (payload.type === 'resetScores') {
+        resetScores();
+      } else if (payload.type === 'togglePause') {
+        state.settings.paused = !state.settings.paused;
+        saveSettings();
+        broadcastState();
       } else if (payload.type === 'hint') {
-        if (remaining.length) {
+        const now = Date.now();
+        const cooldown = state.settings.hintCooldownMs;
+        if (now - state.lastHintAt < cooldown) {
+          socket.emit('notice', { message: 'Hint is cooling down, try again shortly' });
+        } else if (remaining.length) {
+          state.lastHintAt = now;
           const pick = remaining[Math.floor(Math.random() * remaining.length)];
           // Sent to every screen, so the streamed display shows it too.
-          io.emit('hint', { letter: pick[0], length: pick.length });
+          io.emit('hint', { letter: pick[0], length: pick.length, durationMs: state.settings.hintDurationMs });
         } else {
           socket.emit('notice', { message: 'No secret words left to hint' });
         }
@@ -485,10 +666,14 @@ io.on('connection', function (socket) {
           socket.emit('notice', { message: 'No secret words left to simulate' });
         } else {
           const pick = remaining[Math.floor(Math.random() * remaining.length)];
-          handleGuess(pick, 'TestViewer' + Math.floor(Math.random() * 999));
+          handleGuess(pick, 'TestViewer' + Math.floor(Math.random() * 999), null);
         }
       } else if (payload.type === 'overrideReveal') {
-        handleGuess(payload.word, 'Host');
+        handleGuess(payload.word, 'Host', null);
+      } else if (payload.type === 'updateSettings') {
+        state.settings = sanitizeSettings(Object.assign({}, state.settings, payload.settings || {}));
+        saveSettings();
+        broadcastState();
       }
     } catch (err) {
       console.error('hostAction error:', err);

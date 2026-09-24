@@ -763,3 +763,328 @@ html.fs body { overflow-y: auto; }
   .mochi .body.boing, .slot.pop, #celebrationText { animation: none; }
   #progressFill { transition: none; }
 }
+
+/* =======================================================================
+   THEMES — the whole game reads colors from CSS custom properties on
+   :root, so a theme swap is just re-declaring those variables under a
+   data-theme attribute set on <html> by game.js.
+   ======================================================================= */
+html[data-theme="mint"] {
+  --strawberry: #35b98d;
+  --strawberry-deep: #1f8a68;
+  --butter: #ffd75e;
+  --sh: 20, 90, 70;
+}
+html[data-theme="mint"] body {
+  background:
+    radial-gradient(rgba(255, 255, 255, 0.55) 2px, transparent 3px) 0 0 / 28px 28px,
+    linear-gradient(160deg, #d6fff0 0%, #daffe8 50%, #d6f7ff 100%);
+}
+
+html[data-theme="sunset"] {
+  --strawberry: #ff7a45;
+  --strawberry-deep: #c4501f;
+  --butter: #ffcf5e;
+  --sh: 140, 60, 30;
+}
+html[data-theme="sunset"] body {
+  background:
+    radial-gradient(rgba(255, 255, 255, 0.5) 2px, transparent 3px) 0 0 / 28px 28px,
+    linear-gradient(160deg, #ffe3cf 0%, #ffd0d6 50%, #ffe8c2 100%);
+}
+
+html[data-theme="ocean"] {
+  --strawberry: #2f8fd6;
+  --strawberry-deep: #1f5f97;
+  --butter: #6fd8c8;
+  --sh: 20, 60, 120;
+}
+html[data-theme="ocean"] body {
+  background:
+    radial-gradient(rgba(255, 255, 255, 0.5) 2px, transparent 3px) 0 0 / 28px 28px,
+    linear-gradient(160deg, #d6f0ff 0%, #dcefff 50%, #e2f7ff 100%);
+}
+
+html[data-theme="midnight"] {
+  --ink: #f1e9ff;
+  --ink-soft: #c9b6ea;
+  --cream: #2a2140;
+  --strawberry: #ff6fae;
+  --strawberry-deep: #c94e86;
+  --butter: #ffd75e;
+  --sh: 10, 4, 25;
+}
+html[data-theme="midnight"] body {
+  color: var(--ink);
+  background:
+    radial-gradient(rgba(255, 255, 255, 0.06) 2px, transparent 3px) 0 0 / 28px 28px,
+    linear-gradient(160deg, #1c1530 0%, #241a3a 50%, #171225 100%);
+}
+html[data-theme="midnight"] .modeBtn,
+html[data-theme="midnight"] .iconBtn,
+html[data-theme="midnight"] #toast,
+html[data-theme="midnight"] .panel input[type="text"] { color: var(--ink); }
+html[data-theme="midnight"] .modeBtn { background: #362a52; }
+html[data-theme="midnight"] .iconBtn { background: #362a52; }
+html[data-theme="midnight"] .panel input[type="text"] { background: #362a52; }
+html[data-theme="midnight"] #modeBar,
+html[data-theme="midnight"] #bottomControls { background: rgba(30, 22, 48, 0.85); }
+html[data-theme="midnight"] #showControlsBtn { background: var(--cream); color: var(--ink); }
+
+/* ---------- compact / stream mode ---------- */
+html.compact #rulesLegend,
+html.compact #diagnostics,
+html.compact #roundInfo { display: none; }
+html.compact #app { gap: 6px; }
+
+/* ---------- board animation toggle ---------- */
+html.no-board-anim .mochi,
+html.no-board-anim .mochi .eye,
+html.no-board-anim .mochi .body.boing { animation: none !important; }
+
+/* =======================================================================
+   AVATARS — circular viewer profile pictures (real TikTok avatar when
+   known, otherwise a deterministic colorful initials avatar). Used in the
+   live feed, next to newly-found secret words, on bonus word chips, and
+   in the leaderboard.
+   ======================================================================= */
+.avatar {
+  --a-size: 26px;
+  width: var(--a-size);
+  height: var(--a-size);
+  border-radius: 50%;
+  flex: 0 0 auto;
+  object-fit: cover;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--a-size) * 0.42);
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 0 0 2px #fff, 0 2px 5px rgba(var(--sh), 0.35);
+  overflow: hidden;
+  user-select: none;
+}
+.avatar.size-small { --a-size: 18px; }
+.avatar.size-medium { --a-size: 26px; }
+.avatar.size-large { --a-size: 38px; }
+html.hide-avatars .avatar { display: none; }
+
+/* small avatar badge that sits on the corner of a freshly-found slot */
+.slot-avatar {
+  position: absolute;
+  bottom: -6px;
+  right: -6px;
+  z-index: 2;
+}
+.slot-avatar .avatar { --a-size: 20px; }
+
+/* ---------- bonus words as avatar + word chips ---------- */
+#bonusList span.bonusChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 4px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: #fff1b8;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.8), 0 2px 0 #e6b526;
+}
+
+/* ---------- leaderboard rows with avatar ---------- */
+#leaderboard { list-style: none; padding-left: 0; margin: 0; }
+#leaderboard li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+#leaderboard li .rank {
+  min-width: 1.4em;
+  font-weight: 700;
+  color: var(--strawberry-deep);
+  text-align: right;
+}
+#leaderboard li .lbName { font-weight: 600; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#leaderboard li .lbPts { font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
+#leaderboard li:first-child .lbName { font-weight: 800; }
+
+/* =======================================================================
+   FLOATING LIVE GUESS FEED — a reserved, always-available overlay window
+   showing each viewer's avatar next to the word they guessed and the
+   points they gained. Toggle from Settings; position is fixed so it reads
+   well as a stream overlay in OBS-style layouts too.
+   ======================================================================= */
+#liveFeedPanel {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 64px);
+  right: calc(env(safe-area-inset-right, 0px) + 10px);
+  width: min(260px, 42vw);
+  max-height: min(60vh, 420px);
+  background: rgba(255, 249, 252, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(var(--sh), 0.28), inset 0 2px 0 rgba(255, 255, 255, 0.9);
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+html[data-theme="midnight"] #liveFeedPanel { background: rgba(36, 28, 58, 0.92); }
+html.hide-feed #liveFeedPanel,
+html.hide-controls #liveFeedPanel { display: none; }
+
+#liveFeedHeader {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  border-bottom: 2px dotted rgba(var(--sh), 0.2);
+}
+#liveFeedList {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+#liveFeedList:empty::after {
+  content: "Guesses will appear here...";
+  display: block;
+  padding: 10px 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+.feedRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 6px;
+  border-radius: 12px;
+  background: rgba(var(--sh), 0.06);
+  font-size: 12.5px;
+  animation: feedIn 0.35s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.feedRow.bonus { background: #fff1b8; }
+.feedRow .feedUser { font-weight: 700; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34%; }
+.feedRow .feedWord { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; letter-spacing: 0.02em; }
+.feedRow .feedPts { flex: 0 0 auto; font-weight: 700; color: var(--strawberry-deep); }
+@keyframes feedIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 480px) {
+  #liveFeedPanel { width: min(220px, 56vw); top: calc(env(safe-area-inset-top, 0px) + 58px); }
+}
+
+/* host panel: new controls need to wrap nicely with everything else */
+#hostGotoRound { flex: 0 1 90px; }
+#hostPause.active { background: linear-gradient(#ffb1d3, #ff8abf); box-shadow: inset 0 2px 0 rgba(255,255,255,0.6), 0 4px 0 var(--strawberry-deep); }
+
+/* =======================================================================
+   SETTINGS MODAL
+   ======================================================================= */
+#settingsOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(74, 39, 96, 0.55);
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+#settingsOverlay.hidden { display: none; }
+
+#settingsModal {
+  width: min(480px, 100%);
+  max-height: 86vh;
+  background: var(--cream);
+  color: var(--ink);
+  border-radius: 22px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#settingsHeader {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 2px dotted rgba(var(--sh), 0.2);
+}
+#settingsHeader h2 { margin: 0; font-size: 18px; }
+#settingsCloseBtn {
+  border: 0;
+  background: #fff;
+  color: var(--ink);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: inset 0 2px 0 #fff, 0 3px 0 rgba(var(--sh), 0.25);
+}
+
+#settingsBody {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 8px 18px 14px 18px;
+}
+.settingsGroup { margin-top: 14px; }
+.settingsGroup:first-child { margin-top: 4px; }
+.settingsGroup h3 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+.settingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(var(--sh), 0.1);
+  font-size: 14px;
+  font-weight: 500;
+}
+.settingRow:last-child { border-bottom: 0; }
+.settingRow select,
+.settingRow input[type="number"] {
+  font-family: var(--font);
+  padding: 5px 8px;
+  border-radius: 10px;
+  border: 0;
+  background: #f3e6f8;
+  color: var(--ink);
+  font-weight: 600;
+  width: 110px;
+}
+.settingRow input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--strawberry); }
+.settingRow input[type="range"] { width: 120px; accent-color: var(--strawberry); }
+
+#settingsFooter {
+  flex: 0 0 auto;
+  padding: 8px 18px 14px 18px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--ink-soft);
+  min-height: 1.4em;
+}

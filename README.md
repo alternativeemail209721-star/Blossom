@@ -2,6 +2,9 @@
 
 A word game for TikTok LIVE chat. Seven cute mochi friends hold the letters
 (the one with the bow is the **center letter**). Viewers type words in chat.
+Every viewer's circular profile picture shows up next to their guesses, on
+freshly-found words, and on the leaderboard, and the whole game is tunable
+from an in-app Settings panel (theme, sound, points, avatars, and more).
 
 This one folder is everything: game, word database, and deploy settings.
 
@@ -18,6 +21,61 @@ This one folder is everything: game, word database, and deploy settings.
 - Points by length: 4 letters = 1, 5 = 3, 6 = 5, 7+ = 8, all-7-letters = 15.
 - Find all 20 secret words to win the round; the next round starts on its own.
   There are 40 rounds and the game loops.
+
+## Viewer avatars
+
+Every guess — secret or bonus — carries the viewer's circular profile
+picture wherever their name appears: the freshly-found slot, the bonus word
+chip, the leaderboard, and the floating live guess feed (see below). In
+**Live** mode this is the viewer's real TikTok profile picture. In
+**Offline** and **Test** mode (and for any viewer TikTok gives no picture
+for) it's a colorful circle with their initials instead, generated on the
+fly — nothing ever shows a broken image. Turn avatars off entirely, or
+change their size, from Settings.
+
+## The floating live guess feed
+
+A small floating panel (top right by default) lists the most recent
+guesses as they come in — avatar, name, the word, and the points earned —
+like a live stream overlay. It's always reserved space that updates in
+real time; toggle it, and set how many guesses it keeps, from Settings.
+
+## Settings panel
+
+Tap the gear icon in the top bar to open **Settings**. Every change is
+instant on every connected screen and saved to `data/settings.json`, so it
+survives a restart or redeploy. What you can customize:
+
+- **Appearance** — theme (Candy Pink, Minty Fresh, Sunset, Ocean Breeze,
+  Midnight), viewer avatars on/off and their size, board animations,
+  confetti, compact/stream mode (hides the rules legend and diagnostics
+  for a clean overlay), and the diagnostics panel itself.
+- **Live feed & leaderboard** — show/hide the floating feed, how many
+  guesses it keeps, and how many names the leaderboard shows.
+- **Gameplay** — turn bonus words on/off, a points multiplier, minimum
+  guess length, hint cooldown and on-screen duration, the skip-round
+  cooldown, and how long the game waits after a round is won before
+  auto-advancing.
+- **Sound** — on/off and volume for the built-in correct-guess, bonus,
+  round-win, and hint sound effects (synthesized in the browser, so there
+  are no audio files to manage).
+
+Note: lowering "Minimum guess length" below 4 only matters once your word
+database actually contains shorter words — the bundled `words-base.txt`
+starts at 4 letters. Add 3-letter words to `data/extra-words.txt` (or run
+`npm run build-words` with internet access) if you want 3-letter guesses
+to be accepted.
+
+## Extra host controls
+
+Alongside Skip Round and Hint, the host panel has:
+
+- **Pause / Resume** — instantly stop accepting guesses on every screen,
+  without disconnecting Live mode.
+- **Round #, Go** — jump straight to any round by number.
+- **Reset Scores** — clears the leaderboard (asks for confirmation first).
+- **Export CSV** — downloads the current leaderboard as `leaderboard.csv`,
+  handy for picking winners after a session.
 
 ## Host controls, fullscreen and clean view
 
@@ -115,6 +173,7 @@ data/
   common-words.txt         pool for secret words
   secret-exclude.txt       words kept out of secret slots
   rounds.json              the 40 rounds
+  settings.json            saved Settings-panel values (created automatically)
 scripts/
   build-dictionary.js      builds words-full.txt
   build-rounds.js          builds rounds.json

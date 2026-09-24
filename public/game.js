@@ -1,8 +1,9 @@
 // game.js — everything the browser page does.
-// Sections: viewport fix, socket, mochi board, secret-word slots, length chips,
-// bonus words, leaderboard, diagnostics, toast + celebration, modes,
-// fullscreen + hide-controls, offline/test/host controls, and the socket
-// event wiring at the bottom.
+// Sections: viewport fix, socket, avatars, mochi board, secret-word slots,
+// length chips, bonus words, leaderboard, live feed, diagnostics, toast +
+// celebration, sound effects, settings panel, modes, fullscreen + hide
+// controls, offline/test/host controls, and the socket event wiring at the
+// bottom.
 
 // viewport — fixes mobile browsers reporting the wrong 100vh
 function setViewportHeight() {
@@ -14,10 +15,68 @@ window.addEventListener('orientationchange', setViewportHeight);
 document.addEventListener('fullscreenchange', function () { setTimeout(setViewportHeight, 50); });
 document.addEventListener('webkitfullscreenchange', function () { setTimeout(setViewportHeight, 50); });
 
-const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // socket — connects to the server
 const socket = io();
+
+// current settings, filled in as soon as the server sends state. Sensible
+// defaults here just avoid a flash of the wrong UI before the first 'state'.
+let settings = {
+  theme: 'candy', showAvatars: true, avatarSize: 'medium', boardAnimationEnabled: true,
+  confettiEnabled: true, compactMode: false, showDiagnostics: true, showRecentFeed: true,
+  recentFeedSize: 12, leaderboardSize: 10, bonusWordsEnabled: true, pointsMultiplier: 1,
+  minGuessLength: 4, hintCooldownMs: 8000, hintDurationMs: 5000, skipCooldownMs: 600,
+  autoAdvanceDelayMs: 5000, paused: false, soundEnabled: true, soundVolume: 0.5
+};
+
+// ---------------- AVATARS ----------------
+// Real TikTok avatars are used automatically whenever the server has one for
+// a viewer. Everyone else (offline/test/host, or a viewer TikTok gave no
+// picture for) gets a deterministic colorful initials avatar instead, so the
+// UI never shows a broken image.
+const AVATAR_PALETTE = ['#ff6fae', '#ffb15e', '#8ee6c8', '#8ed2ff', '#c9b6ff', '#ff9ec6', '#5eceb0', '#f0a8ff'];
+function hashUser(name) {
+  let h = 0;
+  const s = String(name || '?');
+  for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) >>> 0; }
+  return h;
+}
+function initialsFor(name) {
+  const s = String(name || '?').trim();
+  if (!s) return '?';
+  const parts = s.replace(/[^a-zA-Z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+  if (!parts.length) return s[0].toUpperCase();
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+function avatarSizeClass() {
+  return 'size-' + (settings.avatarSize || 'medium');
+}
+// Returns a DOM element: a real <img> when a URL is known, otherwise a
+// colored circle with initials. Always circular via the shared .avatar class.
+function makeAvatar(user, url) {
+  const sizeClass = avatarSizeClass();
+  if (url) {
+    const img = document.createElement('img');
+    img.className = 'avatar ' + sizeClass;
+    img.src = url;
+    img.alt = user || '';
+    img.referrerPolicy = 'no-referrer';
+    img.loading = 'lazy';
+    img.onerror = function () {
+      const fallback = makeAvatar(user, null);
+      if (img.parentNode) img.parentNode.replaceChild(fallback, img);
+    };
+    return img;
+  }
+  const div = document.createElement('div');
+  div.className = 'avatar ' + sizeClass;
+  div.style.background = AVATAR_PALETTE[hashUser(user) % AVATAR_PALETTE.length];
+  div.textContent = initialsFor(user);
+  div.title = user || '';
+  return div;
+}
 
 // ---------------- MOCHI BOARD (7 letters: 1 center + 6 friends) ----------------
 const MOCHI_COLORS = ['mint', 'lavender', 'peach', 'sky', 'butter', 'bubble'];
@@ -77,7 +136,7 @@ function renderBoard(letters, center) {
 
 // every mochi does a happy squish when a word is found
 function boingBoard() {
-  if (reduceMotion) return;
+  if (reduceMotion || !settings.boardAnimationEnabled) return;
   const bodies = document.querySelectorAll('#flower .body');
   bodies.forEach(function (b, i) {
     b.classList.remove('boing');
@@ -119,7 +178,8 @@ function renderLengthChips(s) {
 
 // ---------------- SECRET WORD SLOTS ----------------
 // Each slot is one secret word. Until it is found it only shows how many
-// letters it has (a badge number + one dot per letter).
+// letters it has (a badge number + one dot per letter). Once found, a small
+// circular avatar of whoever found it sits on the slot's corner.
 function renderSlots(slots) {
   const slotsEl = document.getElementById('slots');
 
@@ -128,7 +188,7 @@ function renderSlots(slots) {
     slots.forEach(function () {
       const s = document.createElement('div');
       s.className = 'slot';
-      s.innerHTML = '<span class="badge"></span><span class="dots"></span><span class="word"></span>';
+      s.innerHTML = '<span class="badge"></span><span class="dots"></span><span class="word"></span><span class="slot-avatar"></span>';
       slotsEl.appendChild(s);
     });
   }
@@ -151,6 +211,14 @@ function renderSlots(slots) {
     el.className = 'slot len-' + slot.len + (slot.pangram ? ' pangram' : '') + (found ? ' found' : '');
     el.querySelector('.word').textContent = found;
 
+    const avatarSlot = el.querySelector('.slot-avatar');
+    if (found && settings.showAvatars) {
+      avatarSlot.innerHTML = '';
+      avatarSlot.appendChild(makeAvatar(slot.by, slot.avatar));
+    } else {
+      avatarSlot.innerHTML = '';
+    }
+
     if (found && found !== prevFound && !reduceMotion) {
       el.classList.add('pop');
     }
@@ -165,20 +233,61 @@ function renderBonus(count, recent) {
   list.innerHTML = '';
   recent.forEach(function (b) {
     const chip = document.createElement('span');
-    chip.textContent = b.word;
+    chip.className = 'bonusChip';
     chip.title = b.by;
+    if (settings.showAvatars) chip.appendChild(makeAvatar(b.by, b.avatar));
+    const text = document.createElement('span');
+    text.textContent = b.word;
+    chip.appendChild(text);
     list.appendChild(chip);
   });
 }
 
 // ---------------- LEADERBOARD ----------------
 function renderLeaderboard(entries) {
+  document.getElementById('leaderboardSizeLabel').textContent = settings.leaderboardSize;
   const el = document.getElementById('leaderboard');
   el.innerHTML = '';
-  entries.forEach(function (row) {
+  entries.forEach(function (row, i) {
     const li = document.createElement('li');
-    li.textContent = row.user + ' \u2014 ' + row.points + ' pts';
+    const rank = document.createElement('span');
+    rank.className = 'rank';
+    rank.textContent = (i + 1) + '.';
+    li.appendChild(rank);
+    if (settings.showAvatars) li.appendChild(makeAvatar(row.user, row.avatar));
+    const name = document.createElement('span');
+    name.className = 'lbName';
+    name.textContent = row.user;
+    li.appendChild(name);
+    const pts = document.createElement('span');
+    pts.className = 'lbPts';
+    pts.textContent = row.points + ' pts';
+    li.appendChild(pts);
     el.appendChild(li);
+  });
+}
+
+// ---------------- LIVE GUESS FEED (floating window) ----------------
+function renderLiveFeed(entries) {
+  const list = document.getElementById('liveFeedList');
+  list.innerHTML = '';
+  entries.forEach(function (row) {
+    const item = document.createElement('div');
+    item.className = 'feedRow' + (row.secret ? '' : ' bonus');
+    if (settings.showAvatars) item.appendChild(makeAvatar(row.user, row.avatar));
+    const user = document.createElement('span');
+    user.className = 'feedUser';
+    user.textContent = row.user;
+    item.appendChild(user);
+    const word = document.createElement('span');
+    word.className = 'feedWord';
+    word.textContent = row.word;
+    item.appendChild(word);
+    const pts = document.createElement('span');
+    pts.className = 'feedPts';
+    pts.textContent = '+' + row.points;
+    item.appendChild(pts);
+    list.appendChild(item);
   });
 }
 
@@ -197,6 +306,43 @@ function renderDiagnostics(rawEventCount, lastReceived, liveConnected, liveUsern
   }
 }
 
+// ---------------- SOUND EFFECTS ----------------
+// Small synthesized beeps via the Web Audio API — no sound files needed, so
+// this always works the moment sound is enabled in Settings.
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (Ctx) audioCtx = new Ctx();
+  }
+  return audioCtx;
+}
+function beep(freq, durationMs, type) {
+  if (!settings.soundEnabled) return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.value = freq;
+  const vol = Math.max(0, Math.min(1, settings.soundVolume));
+  gain.gain.setValueAtTime(vol * 0.25, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + durationMs / 1000);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + durationMs / 1000);
+}
+function playCorrectSound(isSecret) {
+  beep(isSecret ? 880 : 660, 160, 'triangle');
+}
+function playRoundCompleteSound() {
+  [523, 659, 784, 1046].forEach(function (f, i) {
+    setTimeout(function () { beep(f, 220, 'triangle'); }, i * 110);
+  });
+}
+function playHintSound() { beep(440, 120, 'sine'); }
+
 // ---------------- TOAST + CELEBRATION ----------------
 let toastTimer = null;
 function showToast(message, ms) {
@@ -210,7 +356,7 @@ function showToast(message, ms) {
 }
 
 function launchConfetti() {
-  if (reduceMotion) return;
+  if (reduceMotion || !settings.confettiEnabled) return;
   const box = document.getElementById('confetti');
   box.innerHTML = '';
   const colors = ['#ff6fae', '#ffd75e', '#8ee6c8', '#8ed2ff', '#c9b6ff', '#ffb58a'];
@@ -229,6 +375,7 @@ function showCelebration() {
   const el = document.getElementById('celebration');
   el.classList.remove('hidden');
   launchConfetti();
+  playRoundCompleteSound();
   if (celebrationTimer) clearTimeout(celebrationTimer);
   celebrationTimer = setTimeout(function () {
     el.classList.add('hidden');
@@ -423,13 +570,126 @@ const skipBtn = document.getElementById('hostSkip');
 skipBtn.addEventListener('click', function () {
   if (skipBtn.disabled || !ensureConnected()) return;
   skipBtn.disabled = true;
-  setTimeout(function () { skipBtn.disabled = false; }, 800);
+  setTimeout(function () { skipBtn.disabled = false; }, Math.max(200, settings.skipCooldownMs || 600) + 200);
   socket.emit('hostAction', { type: 'skipRound' });
 });
 
 document.getElementById('hostHint').addEventListener('click', function () {
   if (!ensureConnected()) return;
   socket.emit('hostAction', { type: 'hint' });
+});
+
+document.getElementById('hostPause').addEventListener('click', function () {
+  if (!ensureConnected()) return;
+  socket.emit('hostAction', { type: 'togglePause' });
+});
+
+document.getElementById('hostGotoBtn').addEventListener('click', function () {
+  const input = document.getElementById('hostGotoRound');
+  const n = parseInt(input.value, 10);
+  if (!n || !ensureConnected()) return;
+  socket.emit('hostAction', { type: 'gotoRound', index: n });
+  input.value = '';
+});
+document.getElementById('hostGotoRound').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') document.getElementById('hostGotoBtn').click();
+});
+
+document.getElementById('hostReset').addEventListener('click', function () {
+  if (!ensureConnected()) return;
+  if (!window.confirm('Reset every viewer\'s score to zero? This cannot be undone.')) return;
+  socket.emit('hostAction', { type: 'resetScores' });
+});
+
+document.getElementById('hostExport').addEventListener('click', function () {
+  window.open('/api/export-leaderboard', '_blank');
+});
+
+// ---------------- SETTINGS PANEL ----------------
+const settingsOverlay = document.getElementById('settingsOverlay');
+const settingsFields = {
+  theme: document.getElementById('setTheme'),
+  showAvatars: document.getElementById('setShowAvatars'),
+  avatarSize: document.getElementById('setAvatarSize'),
+  boardAnimationEnabled: document.getElementById('setBoardAnim'),
+  confettiEnabled: document.getElementById('setConfetti'),
+  compactMode: document.getElementById('setCompact'),
+  showDiagnostics: document.getElementById('setDiagnostics'),
+  showRecentFeed: document.getElementById('setShowFeed'),
+  recentFeedSize: document.getElementById('setFeedSize'),
+  leaderboardSize: document.getElementById('setLeaderboardSize'),
+  bonusWordsEnabled: document.getElementById('setBonusEnabled'),
+  pointsMultiplier: document.getElementById('setPointsMultiplier'),
+  minGuessLength: document.getElementById('setMinGuessLength'),
+  hintCooldownMs: document.getElementById('setHintCooldown'),     // seconds in UI
+  hintDurationMs: document.getElementById('setHintDuration'),     // seconds in UI
+  skipCooldownMs: document.getElementById('setSkipCooldown'),
+  autoAdvanceDelayMs: document.getElementById('setAutoAdvance'),  // seconds in UI
+  soundEnabled: document.getElementById('setSoundEnabled'),
+  soundVolume: document.getElementById('setSoundVolume')
+};
+const MS_TO_SEC_FIELDS = ['hintCooldownMs', 'hintDurationMs', 'autoAdvanceDelayMs'];
+
+let suppressSettingsEvents = false;
+function populateSettingsForm() {
+  suppressSettingsEvents = true;
+  Object.keys(settingsFields).forEach(function (key) {
+    const field = settingsFields[key];
+    if (!field) return;
+    let val = settings[key];
+    if (MS_TO_SEC_FIELDS.indexOf(key) !== -1) val = Math.round(val / 1000);
+    if (field.type === 'checkbox') field.checked = !!val;
+    else field.value = val;
+  });
+  suppressSettingsEvents = false;
+}
+
+function applySettingsToDom() {
+  document.documentElement.setAttribute('data-theme', settings.theme || 'candy');
+  document.documentElement.classList.toggle('hide-avatars', !settings.showAvatars);
+  document.documentElement.classList.toggle('no-board-anim', !settings.boardAnimationEnabled);
+  document.documentElement.classList.toggle('compact', !!settings.compactMode);
+  document.documentElement.classList.toggle('hide-feed', !settings.showRecentFeed);
+  document.getElementById('diagnostics').style.display = settings.showDiagnostics ? '' : 'none';
+  const pauseBtn = document.getElementById('hostPause');
+  pauseBtn.textContent = settings.paused ? 'Resume' : 'Pause';
+  pauseBtn.classList.toggle('active', !!settings.paused);
+}
+
+function sendSettingsUpdate(partial) {
+  if (!ensureConnected()) return;
+  socket.emit('hostAction', { type: 'updateSettings', settings: partial });
+}
+
+Object.keys(settingsFields).forEach(function (key) {
+  const field = settingsFields[key];
+  if (!field) return;
+  const evt = (field.type === 'checkbox' || field.tagName === 'SELECT') ? 'change' : 'input';
+  field.addEventListener(evt, function () {
+    if (suppressSettingsEvents) return;
+    let val;
+    if (field.type === 'checkbox') val = field.checked;
+    else if (field.type === 'number' || field.type === 'range') val = parseFloat(field.value);
+    else val = field.value;
+    if (MS_TO_SEC_FIELDS.indexOf(key) !== -1) val = Math.round(val * 1000);
+    const partial = {};
+    partial[key] = val;
+    sendSettingsUpdate(partial);
+    const note = document.getElementById('settingsSavedNote');
+    note.textContent = 'Saved';
+    setTimeout(function () { note.textContent = ''; }, 1200);
+  });
+});
+
+document.getElementById('settingsBtn').addEventListener('click', function () {
+  populateSettingsForm();
+  settingsOverlay.classList.remove('hidden');
+});
+document.getElementById('settingsCloseBtn').addEventListener('click', function () {
+  settingsOverlay.classList.add('hidden');
+});
+settingsOverlay.addEventListener('click', function (e) {
+  if (e.target === settingsOverlay) settingsOverlay.classList.add('hidden');
 });
 
 // ---------------- SOCKET EVENTS ----------------
@@ -439,6 +699,8 @@ function applyState(s) {
   if (!s) return;
   currentMode = s.mode;
   currentCenter = s.center;
+  if (s.settings) settings = s.settings;
+  applySettingsToDom();
   if (s.mode === 'live') liveTabOpen = false;
   // Stay on the Live tab while the person is typing a username, even if other
   // screens cause a state update in the meantime.
@@ -451,6 +713,7 @@ function applyState(s) {
   renderSlots(s.slots);
   renderBonus(s.bonusCount, s.bonusRecent);
   renderLeaderboard(s.leaderboard);
+  renderLiveFeed(s.recentGuesses || []);
   renderDiagnostics(s.rawEventCount, s.lastReceived, s.liveConnected, s.liveUsername, s.dictionarySize);
 }
 
@@ -467,6 +730,7 @@ socket.on('connect', function () {
 
 socket.on('wordFound', function (data) {
   boingBoard();
+  playCorrectSound(data.secret);
   if (data.secret) {
     showToast(data.user + ' found ' + data.word + ' (+' + data.points + ')');
   } else {
@@ -488,7 +752,8 @@ socket.on('newRound', function (s) {
 });
 
 socket.on('hint', function (data) {
-  showToast('Hint: starts with ' + data.letter + ', ' + data.length + ' letters', 5000);
+  playHintSound();
+  showToast('Hint: starts with ' + data.letter + ', ' + data.length + ' letters', data.durationMs || 5000);
 });
 
 socket.on('notice', function (data) {
@@ -499,11 +764,13 @@ socket.on('notice', function (data) {
 socket.on('guessRejected', function (data) {
   const word = data.word || '';
   const messages = {
-    tooShort: 'Words need at least 4 letters',
+    tooShort: 'Words need at least ' + settings.minGuessLength + ' letters',
     alreadyFound: word + ' was already found',
     wrongLetters: 'Use only the 7 letters on the board',
     missingCenter: 'Every word must use the center letter (' + currentCenter + ')',
-    notAWord: word + ' is not in the dictionary'
+    notAWord: word + ' is not in the dictionary',
+    bonusDisabled: 'Bonus words are turned off right now',
+    paused: 'The game is paused'
   };
   showToast(messages[data.reason] || 'Guess not accepted');
 });
