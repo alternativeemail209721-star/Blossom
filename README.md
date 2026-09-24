@@ -19,6 +19,25 @@ This one folder is everything: game, word database, and deploy settings.
 - Find all 20 secret words to win the round; the next round starts on its own.
   There are 40 rounds and the game loops.
 
+## Host controls, fullscreen and clean view
+
+- **Skip Round** jumps to the next round on every connected screen. It ignores
+  a double-click so you never skip two rounds by accident.
+- **Hint** shows the first letter and length of a random unfound secret word
+  on every screen for 5 seconds.
+- **Fullscreen** button (top right) or press **F**. On iPhone Safari real
+  fullscreen is not allowed for web pages, so the button switches to a clean
+  full-screen-style layout instead; use "Add to Home Screen" for a true
+  full-screen app.
+- **Hide controls** (eye button, or press **H**) hides the mode bar, host
+  controls and diagnostics for a clean stream picture. A small gear button in the
+  corner (or **H** again) brings them back.
+- On wide or landscape screens (laptop, TV, fullscreen) the game switches to a
+  two-column layout: board on the left, secret words and leaderboard on the right.
+- Click anywhere on the "Round Complete!" celebration to dismiss it early.
+- If the server is asleep or the connection drops, a message appears and the
+  buttons warn you instead of silently doing nothing.
+
 ## 1. Try it on your computer
 
 1. Install Node.js from https://nodejs.org (version 18 or newer).
@@ -75,6 +94,10 @@ never shown on stream. Add your own lines any time.
   command for more rounds: `node scripts/build-rounds.js 60`.
 - To ban a word from being a secret word (it still works as a bonus word), add
   it to `data/secret-exclude.txt` and rebuild.
+
+## Health check
+
+`/healthz` returns a small JSON status (useful for Render's health checks).
 
 ## Folder map
 

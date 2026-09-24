@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#ffdcee" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
 <title>Blossom LIVE</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -18,82 +21,92 @@
     <button class="modeBtn" data-mode="test">Test</button>
     <button class="modeBtn" data-mode="live">Live</button>
     <span id="modeLabel">OFFLINE</span>
+    <button id="hideBtn" class="iconBtn" type="button" title="Hide controls (H)" aria-label="Hide controls">&#128065;</button>
+    <button id="fsBtn" class="iconBtn" type="button" title="Fullscreen (F)" aria-label="Enter fullscreen">&#9974;</button>
   </div>
 
-  <div id="rulesLegend">
-    Type words made from these letters. Every word must use the center letter
-    (<span id="centerCallout">?</span>).
-    Find the <span id="slotsTotalText">20</span> secret words, each
-    <span id="lenRange">4 to 8</span> letters long!
-  </div>
+  <!-- Left column on wide screens; on phones the two columns simply stack -->
+  <section id="colLeft">
+    <div id="rulesLegend">
+      Type words made from these letters. Every word must use the center letter
+      (<span id="centerCallout">?</span>).
+      Find the <span id="slotsTotalText">20</span> secret words, each
+      <span id="lenRange">4 to 8</span> letters long!
+    </div>
 
-  <div id="roundInfo">Round <span id="roundNumber">1</span> / <span id="roundTotal">10</span></div>
+    <div id="roundInfo">Round <span id="roundNumber">1</span> / <span id="roundTotal">10</span></div>
 
-  <div id="flower" aria-label="Today's letters"></div>
+    <div id="flower" aria-label="Today's letters"></div>
 
-  <div id="progress">
-    <div id="progressText"><span id="foundCount">0</span> of <span id="slotsTotalText2">20</span> secret words found</div>
-    <div id="progressTrack"><div id="progressFill"></div></div>
-  </div>
+    <div id="progress">
+      <div id="progressText"><span id="foundCount">0</span> of <span id="slotsTotalText2">20</span> secret words found</div>
+      <div id="progressTrack"><div id="progressFill"></div></div>
+    </div>
+  </section>
 
-  <div id="lengthChips" aria-label="Secret word lengths"></div>
+  <section id="colRight">
+    <div id="lengthChips" aria-label="Secret word lengths"></div>
 
-  <div id="slots"></div>
+    <div id="slots"></div>
 
-  <div id="bonusWrap">
-    <div id="bonusTitle">Bonus words <span id="bonusCount">0</span> <small>(any other real word, half points)</small></div>
-    <div id="bonusList"></div>
-  </div>
+    <div id="bonusWrap">
+      <div id="bonusTitle">Bonus words <span id="bonusCount">0</span> <small>(any other real word, half points)</small></div>
+      <div id="bonusList"></div>
+    </div>
 
-  <div id="leaderboardWrap">
-    <h3>Top 10</h3>
-    <ol id="leaderboard"></ol>
-  </div>
+    <div id="leaderboardWrap">
+      <h3>Top 10</h3>
+      <ol id="leaderboard"></ol>
+    </div>
 
-  <div id="diagnostics">
-    <div>All Raw Events: <span id="rawCount">0</span></div>
-    <div>Last Received: <span id="lastReceived">(none yet)</span></div>
-    <div>Word database: <span id="dictSize">0</span> words</div>
-    <div id="liveStatus"></div>
-  </div>
+    <div id="diagnostics">
+      <div>All Raw Events: <span id="rawCount">0</span></div>
+      <div>Last Received: <span id="lastReceived">(none yet)</span></div>
+      <div>Word database: <span id="dictSize">0</span> words</div>
+      <div id="liveStatus"></div>
+    </div>
+  </section>
 
   <div id="bottomControls" class="sticky-bottom">
 
     <div id="offlinePanel" class="panel">
-      <input id="offlineInput" type="text" placeholder="Type your guess..." autocomplete="off" />
-      <button id="offlineSubmit">Guess</button>
+      <input id="offlineInput" type="text" placeholder="Type your guess..." autocomplete="off" autocapitalize="off" spellcheck="false" />
+      <button id="offlineSubmit" type="button">Guess</button>
     </div>
 
     <div id="testPanel" class="panel">
-      <button id="testAutoBtn">Simulate Random Correct Guess</button>
-      <input id="testCustomInput" type="text" placeholder="Simulate custom chat text..." autocomplete="off" />
-      <button id="testCustomBtn">Send</button>
+      <button id="testAutoBtn" type="button">Simulate Random Correct Guess</button>
+      <input id="testCustomInput" type="text" placeholder="Simulate custom chat text..." autocomplete="off" autocapitalize="off" spellcheck="false" />
+      <button id="testCustomBtn" type="button">Send</button>
     </div>
 
     <div id="livePanel" class="panel">
-      <input id="liveUsernameInput" type="text" placeholder="TikTok username (no @)" autocomplete="off" />
-      <button id="liveConnectBtn">Connect</button>
-      <button id="liveDisconnectBtn">Disconnect</button>
+      <input id="liveUsernameInput" type="text" placeholder="TikTok username (no @)" autocomplete="off" autocapitalize="off" spellcheck="false" />
+      <button id="liveConnectBtn" type="button">Connect</button>
+      <button id="liveDisconnectBtn" type="button">Disconnect</button>
     </div>
 
     <div id="hostPanel" class="panel">
       <div class="hostTitle">Host controls</div>
-      <input id="hostInput" type="text" placeholder="Type/override a comment as host..." autocomplete="off" />
-      <button id="hostSubmit">Submit</button>
-      <button id="hostSkip">Skip Round</button>
-      <button id="hostHint">Hint</button>
+      <input id="hostInput" type="text" placeholder="Type/override a comment as host..." autocomplete="off" autocapitalize="off" spellcheck="false" />
+      <button id="hostSubmit" type="button">Submit</button>
+      <button id="hostSkip" type="button">Skip Round</button>
+      <button id="hostHint" type="button">Hint</button>
     </div>
 
   </div>
 
 </div>
+
+<!-- Shown only while the controls are hidden (clean view for streaming) -->
+<button id="showControlsBtn" type="button" title="Show controls (H)" aria-label="Show controls">&#9881;</button>
 
 <div id="celebration" class="hidden">
   <div id="confetti"></div>
   <div id="celebrationText">Round Complete!</div>
 </div>
 
-<div id="toast" class="hidden"></div>
+<div id="toast" class="hidden" role="status" aria-live="polite"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="/game.js"></script>

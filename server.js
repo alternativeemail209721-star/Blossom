@@ -203,13 +203,28 @@ function resetRoundState() {
 
 let advancingRound = false;
 let roundTimer = null;
+let lastAdvanceAt = 0;
 
+// Moves to the next round and tells EVERY connected screen about it.
+// (Earlier versions only sent a 'newRound' event and never the new state,
+// so the browser kept showing the old round: that was the broken Skip button.)
 function nextRound() {
   if (roundTimer) { clearTimeout(roundTimer); roundTimer = null; }
   advancingRound = false;
+  lastAdvanceAt = Date.now();
   state.roundIndex = (state.roundIndex + 1) % ROUNDS.length;
   resetRoundState();
   io.emit('newRound', publicState());
+  broadcastState();
+}
+
+// Host "skip": ignores a second press within a moment so a double-click
+// cannot skip two rounds by accident. Returns true if it skipped.
+const SKIP_COOLDOWN_MS = 600;
+function skipRound() {
+  if (Date.now() - lastAdvanceAt < SKIP_COOLDOWN_MS) return false;
+  nextRound();
+  return true;
 }
 
 // onReject (optional) is called with (reason, word) when a guess is not accepted.
@@ -269,6 +284,7 @@ function handleGuess(rawText, user, onReject) {
 // ---------------- TIKTOK LIVE ----------------
 let tiktokConnection = null;
 let liveRetryCount = 0;
+let liveToken = 0;            // bumped on every connect/disconnect so stale retries stop
 const MAX_LIVE_RETRIES = 3;
 
 function extractChat(data) {
@@ -280,6 +296,7 @@ function extractChat(data) {
 }
 
 function stopLive() {
+  liveToken += 1;
   if (tiktokConnection) {
     try { tiktokConnection.disconnect(); } catch (e) { /* ignore */ }
   }
@@ -296,7 +313,13 @@ function startLive(username) {
     return Promise.reject(new Error('Missing EULERSTREAM_API_KEY. Get one free at https://www.eulerstream.com and put it in your .env file.'));
   }
 
+  username = String(username || '').trim().replace(/^@+/, '');   // people often type "@name"
+  if (!username) {
+    return Promise.reject(new Error('Enter a TikTok username first.'));
+  }
+
   stopLive();
+  const myToken = liveToken;
   state.liveUsername = username;
   state.mode = 'live';
   liveRetryCount = 0;
@@ -304,6 +327,10 @@ function startLive(username) {
   function attemptConnect() {
     return new Promise(function (resolve, reject) {
       try {
+        if (tiktokConnection) {   // never leave an old half-open connection behind
+          try { tiktokConnection.disconnect(); } catch (e) { /* ignore */ }
+          tiktokConnection = null;
+        }
         // Log the raw event shape once per connection so a non-coder can
         // see exactly what TikTok is sending if something looks wrong.
         let loggedSample = false;
@@ -340,6 +367,10 @@ function startLive(username) {
 
         tiktokConnection.connect()
           .then(function (connState) {
+            if (myToken !== liveToken) {   // user pressed Disconnect while we were connecting
+              try { tiktokConnection.disconnect(); } catch (e) { /* ignore */ }
+              return reject(new Error('Connection cancelled.'));
+            }
             state.liveConnected = true;
             broadcastState();
             resolve(connState);
@@ -353,6 +384,7 @@ function startLive(username) {
 
   function tryWithRetries() {
     return attemptConnect().catch(function (err) {
+      if (myToken !== liveToken) throw err;   // cancelled: do not retry
       liveRetryCount += 1;
       if (liveRetryCount <= MAX_LIVE_RETRIES) {
         const delay = 1500 * liveRetryCount;
@@ -368,7 +400,15 @@ function startLive(username) {
     });
   }
 
-  return tryWithRetries();
+  return tryWithRetries().catch(function (err) {
+    // Failed for good: leave Live mode instead of showing "LIVE" while disconnected.
+    if (myToken === liveToken) {
+      state.mode = 'offline';
+      state.liveUsername = null;
+      broadcastState();
+    }
+    throw err;
+  });
 }
 
 // ---------------- ROUTES ----------------
@@ -402,8 +442,13 @@ app.post('/api/mode', function (req, res) {
 });
 
 app.post('/api/skip-round', function (req, res) {
-  nextRound();
-  res.json({ ok: true, state: publicState() });
+  const skipped = skipRound();
+  res.json({ ok: true, skipped: skipped, state: publicState() });
+});
+
+// Simple health check (handy for Render).
+app.get('/healthz', function (req, res) {
+  res.json({ ok: true, round: state.roundIndex + 1, words: dictionary.size });
 });
 
 // ---------------- SOCKET.IO ----------------
@@ -425,11 +470,14 @@ io.on('connection', function (socket) {
       const remaining = round.words.filter(function (w) { return !state.foundSecret.has(w); });
 
       if (payload.type === 'skipRound') {
-        nextRound();
+        skipRound();
       } else if (payload.type === 'hint') {
         if (remaining.length) {
           const pick = remaining[Math.floor(Math.random() * remaining.length)];
-          socket.emit('hint', { letter: pick[0], length: pick.length });
+          // Sent to every screen, so the streamed display shows it too.
+          io.emit('hint', { letter: pick[0], length: pick.length });
+        } else {
+          socket.emit('notice', { message: 'No secret words left to hint' });
         }
       } else if (payload.type === 'simulate') {
         // Test mode: pretend a random viewer just typed one of the secret words.

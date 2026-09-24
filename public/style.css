@@ -55,6 +55,10 @@ button, input { font-family: var(--font); }
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* The two columns only matter on wide screens; on phones they vanish and the
+   sections stack exactly like one long column. */
+#colLeft, #colRight { display: contents; }
+
 .sticky-top {
   position: sticky;
   top: env(safe-area-inset-top, 0px);
@@ -106,6 +110,25 @@ button, input { font-family: var(--font); }
   background: linear-gradient(#ff9cc8, var(--strawberry));
   box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.6), 0 3px 0 var(--strawberry-deep);
   font-weight: 700;
+}
+
+.iconBtn {
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: inset 0 2px 0 #fff, 0 3px 0 rgba(var(--sh), 0.25);
+}
+.iconBtn:active { transform: translateY(2px); box-shadow: inset 0 2px 0 #fff, 0 1px 0 rgba(var(--sh), 0.25); }
+.iconBtn.on {
+  background: linear-gradient(#ff9cc8, var(--strawberry));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.6), 0 3px 0 var(--strawberry-deep);
 }
 
 #modeLabel {
@@ -582,6 +605,7 @@ button, input { font-family: var(--font); }
   z-index: 999;
   overflow: hidden;
 }
+#celebration { cursor: pointer; }
 #celebration.hidden { display: none; }
 #celebrationText {
   position: relative;
@@ -627,6 +651,112 @@ button, input { font-family: var(--font); }
   box-shadow: inset 0 2px 0 #fff, 0 4px 0 var(--strawberry), 0 10px 18px rgba(var(--sh), 0.3);
 }
 #toast.hidden { display: none; }
+
+/* ---------- clean view (controls hidden) ---------- */
+#showControlsBtn {
+  display: none;
+  position: fixed;
+  right: calc(env(safe-area-inset-right, 0px) + 12px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--cream);
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.35;
+  z-index: 60;
+  box-shadow: inset 0 2px 0 #fff, 0 3px 0 rgba(var(--sh), 0.3), 0 8px 14px rgba(var(--sh), 0.25);
+  transition: opacity 0.2s;
+}
+#showControlsBtn:hover, #showControlsBtn:focus-visible { opacity: 1; }
+
+html.hide-controls #modeBar,
+html.hide-controls #bottomControls,
+html.hide-controls #diagnostics { display: none; }
+html.hide-controls #showControlsBtn { display: block; }
+html.hide-controls #toast { top: calc(env(safe-area-inset-top, 0px) + 16px); }
+html.hide-controls #app { padding-bottom: 68px; }
+
+/* ---------- wide / landscape / fullscreen: two columns ----------
+   Board + progress on the left, secret words + bonus + leaderboard on the right,
+   so a 16:9 fullscreen stream view fits without a narrow strip in the middle. */
+@media (orientation: landscape) and (min-width: 720px) {
+  #app {
+    max-width: 1500px;
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+      "mode mode"
+      "left right"
+      "controls controls";
+    column-gap: 18px;
+    row-gap: 10px;
+    align-content: stretch;
+  }
+  #modeBar { grid-area: mode; }
+  #colLeft, #colRight {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+  #colLeft { grid-area: left; justify-content: center; }
+  #colRight { grid-area: right; }
+  #bottomControls { grid-area: controls; margin-top: 0; }
+
+  #flower { --flower: min(40vw, calc(var(--vh, 1vh) * 50), 560px); }
+
+  #slots { grid-template-columns: repeat(5, 1fr); }
+  .slot { min-height: clamp(46px, calc(var(--vh, 1vh) * 6.5), 64px); }
+  .slot .word { font-size: clamp(13px, 1.3vw, 21px); }
+  .slot .dots i { width: clamp(5px, 0.5vw, 8px); height: clamp(5px, 0.5vw, 8px); }
+  .chip { font-size: clamp(12.5px, 1vw, 16px); }
+  #rulesLegend { font-size: clamp(14px, 1.15vw, 18px); }
+  #progressText { font-size: clamp(14px, 1.1vw, 17px); }
+  #leaderboard { columns: 2; column-gap: 24px; }
+  #leaderboard li { break-inside: avoid; }
+  .modeBtn { font-size: 14px; }
+}
+
+/* controls in one tidy row on wide screens */
+@media (orientation: landscape) and (min-width: 900px) {
+  .panel { flex-wrap: nowrap; }
+  #hostPanel { flex-wrap: wrap; }
+  #hostPanel .hostTitle { width: auto; margin-right: 4px; }
+  #hostPanel input[type="text"] { flex: 1 1 200px; }
+}
+
+/* short landscape screens (phones on their side): compact controls, side by side */
+@media (orientation: landscape) and (max-height: 520px) {
+  #modeBar { padding-top: 4px; padding-bottom: 4px; }
+  #bottomControls {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 6px 10px 6px 10px;
+  }
+  #bottomControls .panel { flex-wrap: nowrap; }
+  #bottomControls .panel.visible { flex: 1 1 0; min-width: 0; }
+  #hostPanel { margin-top: 0; padding-top: 0; border-top: 0; flex: 1.5 1 0; }
+  .hostTitle { display: none; }
+  .panel input[type="text"] { padding: 7px 10px; flex: 1 1 70px; min-width: 0; }
+  .panel button { padding: 7px 9px; font-size: 12.5px; }
+  #bottomControls #testPanel { flex-wrap: wrap; }
+}
+
+/* fullscreen on a portrait phone/tablet: use the whole width and height */
+html.fs #app { max-width: 1800px; }
+html.fs #app { min-height: calc(var(--vh, 1vh) * 100); }
+@media (orientation: portrait) {
+  html.fs #app { max-width: 720px; }
+}
+html.fs body { overflow-y: auto; }
 
 @media (prefers-reduced-motion: reduce) {
   .mochi, .mochi .eye { animation: none; }

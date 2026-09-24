@@ -1,7 +1,8 @@
 // game.js — everything the browser page does.
 // Sections: viewport fix, socket, mochi board, secret-word slots, length chips,
 // bonus words, leaderboard, diagnostics, toast + celebration, modes,
-// offline/test/host controls, and the socket event wiring at the bottom.
+// fullscreen + hide-controls, offline/test/host controls, and the socket
+// event wiring at the bottom.
 
 // viewport — fixes mobile browsers reporting the wrong 100vh
 function setViewportHeight() {
@@ -10,6 +11,8 @@ function setViewportHeight() {
 setViewportHeight();
 window.addEventListener('resize', setViewportHeight);
 window.addEventListener('orientationchange', setViewportHeight);
+document.addEventListener('fullscreenchange', function () { setTimeout(setViewportHeight, 50); });
+document.addEventListener('webkitfullscreenchange', function () { setTimeout(setViewportHeight, 50); });
 
 const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -196,14 +199,14 @@ function renderDiagnostics(rawEventCount, lastReceived, liveConnected, liveUsern
 
 // ---------------- TOAST + CELEBRATION ----------------
 let toastTimer = null;
-function showToast(message) {
+function showToast(message, ms) {
   const el = document.getElementById('toast');
   el.textContent = message;
   el.classList.remove('hidden');
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(function () {
     el.classList.add('hidden');
-  }, 2400);
+  }, ms || 2400);
 }
 
 function launchConfetti() {
@@ -232,26 +235,44 @@ function showCelebration() {
   }, 4500);
 }
 
-// ---------------- MODES (Offline / Test / Live) ----------------
-let currentMode = 'offline';
+document.getElementById('celebration').addEventListener('click', function () {
+  if (celebrationTimer) clearTimeout(celebrationTimer);
+  this.classList.add('hidden');
+});
 
-function setActiveModeButton(mode) {
+// ---------------- CONNECTION AWARENESS ----------------
+// If the game server is asleep or the network drops, buttons would silently do
+// nothing. This makes that visible, and lets actions warn instead of failing.
+function ensureConnected() {
+  if (socket.connected) return true;
+  showToast('Not connected to the game server yet. Reconnecting...', 3000);
+  return false;
+}
+
+// ---------------- MODES (Offline / Test / Live) ----------------
+let currentMode = 'offline';   // the mode the SERVER is really in
+let liveTabOpen = false;       // the person opened the Live tab to type a username
+
+// tab = which tab/panel is showing; the label always shows the server's real mode.
+function setActiveModeButton(tab) {
   document.querySelectorAll('.modeBtn').forEach(function (btn) {
-    btn.classList.toggle('active', btn.dataset.mode === mode);
+    btn.classList.toggle('active', btn.dataset.mode === tab);
   });
-  document.getElementById('modeLabel').textContent = mode.toUpperCase();
-  document.getElementById('offlinePanel').classList.toggle('visible', mode === 'offline');
-  document.getElementById('testPanel').classList.toggle('visible', mode === 'test');
-  document.getElementById('livePanel').classList.toggle('visible', mode === 'live');
+  document.getElementById('modeLabel').textContent = currentMode.toUpperCase();
+  document.getElementById('offlinePanel').classList.toggle('visible', tab === 'offline');
+  document.getElementById('testPanel').classList.toggle('visible', tab === 'test');
+  document.getElementById('livePanel').classList.toggle('visible', tab === 'live');
 }
 
 document.querySelectorAll('.modeBtn').forEach(function (btn) {
   btn.addEventListener('click', function () {
     const mode = btn.dataset.mode;
     if (mode === 'live') {
-      setActiveModeButton(mode);
+      liveTabOpen = true;
+      setActiveModeButton('live');
       return; // actual connect happens via the Connect button
     }
+    liveTabOpen = false;
     fetch('/api/mode', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -261,7 +282,7 @@ document.querySelectorAll('.modeBtn').forEach(function (btn) {
 });
 
 document.getElementById('liveConnectBtn').addEventListener('click', function () {
-  const username = document.getElementById('liveUsernameInput').value.trim();
+  const username = document.getElementById('liveUsernameInput').value.trim().replace(/^@+/, '');
   if (!username) { showToast('Enter a TikTok username first'); return; }
   fetch('/api/start-live', {
     method: 'POST',
@@ -276,14 +297,91 @@ document.getElementById('liveConnectBtn').addEventListener('click', function () 
     .catch(function (err) { showToast('Live connect failed'); console.error(err); });
 });
 
+document.getElementById('liveUsernameInput').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') document.getElementById('liveConnectBtn').click();
+});
+
 document.getElementById('liveDisconnectBtn').addEventListener('click', function () {
-  fetch('/api/stop-live', { method: 'POST' }).catch(function (err) { console.error(err); });
+  fetch('/api/stop-live', { method: 'POST' })
+    .then(function () { showToast('Disconnected from TikTok LIVE'); })
+    .catch(function (err) { console.error(err); });
+});
+
+// ---------------- FULLSCREEN + HIDE CONTROLS ----------------
+// Real fullscreen where the browser allows it (desktop, Android). iPhone Safari
+// cannot fullscreen a web page, so there the button switches to "immersive" mode:
+// the same clean layout with the browser bar hidden as far as the phone allows
+// (add the page to the Home Screen for a true full-screen app).
+const rootEl = document.documentElement;
+const fsBtn = document.getElementById('fsBtn');
+
+function realFullscreenElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+function canRealFullscreen() {
+  return !!(rootEl.requestFullscreen || rootEl.webkitRequestFullscreen);
+}
+function syncFullscreenUi() {
+  const on = !!realFullscreenElement() || rootEl.classList.contains('immersive');
+  rootEl.classList.toggle('fs', on);
+  fsBtn.setAttribute('aria-label', on ? 'Exit fullscreen' : 'Enter fullscreen');
+  fsBtn.title = (on ? 'Exit fullscreen' : 'Fullscreen') + ' (F)';
+  fsBtn.classList.toggle('on', on);
+  setViewportHeight();
+}
+function toggleFullscreen() {
+  if (realFullscreenElement()) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    return;
+  }
+  if (rootEl.classList.contains('immersive')) {
+    rootEl.classList.remove('immersive');
+    syncFullscreenUi();
+    return;
+  }
+  if (canRealFullscreen()) {
+    // Fullscreen the whole page (not one element) so toasts and the
+    // celebration overlay stay visible.
+    const req = (rootEl.requestFullscreen || rootEl.webkitRequestFullscreen).call(rootEl);
+    if (req && typeof req.catch === 'function') {
+      req.catch(function () {
+        rootEl.classList.add('immersive');   // browser refused: fall back
+        syncFullscreenUi();
+      });
+    }
+  } else {
+    rootEl.classList.add('immersive');
+    syncFullscreenUi();
+    window.scrollTo(0, 1);
+  }
+}
+fsBtn.addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', syncFullscreenUi);
+document.addEventListener('webkitfullscreenchange', syncFullscreenUi);
+
+// Clean view: hides the mode bar, host controls and diagnostics so only the game shows.
+function setControlsHidden(hidden) {
+  rootEl.classList.toggle('hide-controls', hidden);
+  setViewportHeight();
+  if (hidden) showToast('Controls hidden. Press H or tap the gear to bring them back.', 3200);
+}
+document.getElementById('hideBtn').addEventListener('click', function () { setControlsHidden(true); });
+document.getElementById('showControlsBtn').addEventListener('click', function () { setControlsHidden(false); });
+
+// Keyboard: F = fullscreen, H = hide/show controls (ignored while typing).
+document.addEventListener('keydown', function (e) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  const k = (e.key || '').toLowerCase();
+  if (k === 'f') { e.preventDefault(); toggleFullscreen(); }
+  else if (k === 'h') { e.preventDefault(); setControlsHidden(!rootEl.classList.contains('hide-controls')); }
 });
 
 // ---------------- OFFLINE + TEST CONTROLS ----------------
 document.getElementById('offlineSubmit').addEventListener('click', function () {
   const input = document.getElementById('offlineInput');
-  if (!input.value.trim()) return;
+  if (!input.value.trim() || !ensureConnected()) return;
   socket.emit('guess', { text: input.value, user: 'You' });
   input.value = '';
 });
@@ -293,12 +391,13 @@ document.getElementById('offlineInput').addEventListener('keydown', function (e)
 
 // The server picks a random unfound secret word and "types" it as a fake viewer.
 document.getElementById('testAutoBtn').addEventListener('click', function () {
+  if (!ensureConnected()) return;
   socket.emit('hostAction', { type: 'simulate' });
 });
 
 document.getElementById('testCustomBtn').addEventListener('click', function () {
   const input = document.getElementById('testCustomInput');
-  if (!input.value.trim()) return;
+  if (!input.value.trim() || !ensureConnected()) return;
   const fakeUser = 'TestViewer' + Math.floor(Math.random() * 999);
   socket.emit('guess', { text: input.value, user: fakeUser });
   input.value = '';
@@ -310,7 +409,7 @@ document.getElementById('testCustomInput').addEventListener('keydown', function 
 // ---------------- HOST CONTROLS ----------------
 document.getElementById('hostSubmit').addEventListener('click', function () {
   const input = document.getElementById('hostInput');
-  if (!input.value.trim()) return;
+  if (!input.value.trim() || !ensureConnected()) return;
   socket.emit('guess', { text: input.value, user: 'Host' });
   input.value = '';
 });
@@ -318,21 +417,32 @@ document.getElementById('hostInput').addEventListener('keydown', function (e) {
   if (e.key === 'Enter') document.getElementById('hostSubmit').click();
 });
 
-document.getElementById('hostSkip').addEventListener('click', function () {
+// Skip: the server moves to the next round and pushes the new state to every
+// screen. The button pauses briefly so a double-click cannot skip two rounds.
+const skipBtn = document.getElementById('hostSkip');
+skipBtn.addEventListener('click', function () {
+  if (skipBtn.disabled || !ensureConnected()) return;
+  skipBtn.disabled = true;
+  setTimeout(function () { skipBtn.disabled = false; }, 800);
   socket.emit('hostAction', { type: 'skipRound' });
 });
 
 document.getElementById('hostHint').addEventListener('click', function () {
+  if (!ensureConnected()) return;
   socket.emit('hostAction', { type: 'hint' });
 });
 
 // ---------------- SOCKET EVENTS ----------------
 let currentCenter = '';
 
-socket.on('state', function (s) {
+function applyState(s) {
+  if (!s) return;
   currentMode = s.mode;
   currentCenter = s.center;
-  setActiveModeButton(s.mode);
+  if (s.mode === 'live') liveTabOpen = false;
+  // Stay on the Live tab while the person is typing a username, even if other
+  // screens cause a state update in the meantime.
+  setActiveModeButton(liveTabOpen ? 'live' : s.mode);
   document.getElementById('roundNumber').textContent = s.roundNumber;
   document.getElementById('roundTotal').textContent = s.totalRounds;
   renderBoard(s.letters, s.center);
@@ -342,6 +452,17 @@ socket.on('state', function (s) {
   renderBonus(s.bonusCount, s.bonusRecent);
   renderLeaderboard(s.leaderboard);
   renderDiagnostics(s.rawEventCount, s.lastReceived, s.liveConnected, s.liveUsername, s.dictionarySize);
+}
+
+socket.on('state', applyState);
+
+let wasDisconnected = false;
+socket.on('disconnect', function () {
+  wasDisconnected = true;
+  showToast('Connection lost. Reconnecting...', 4000);
+});
+socket.on('connect', function () {
+  if (wasDisconnected) { wasDisconnected = false; showToast('Reconnected'); }
 });
 
 socket.on('wordFound', function (data) {
@@ -353,17 +474,21 @@ socket.on('wordFound', function (data) {
   }
 });
 
-socket.on('roundComplete', function () {
+socket.on('roundComplete', function (s) {
+  applyState(s);
   showCelebration();
 });
 
-socket.on('newRound', function () {
+// A new round started (auto after a win, or the host skipped): show it right away.
+socket.on('newRound', function (s) {
   document.getElementById('celebration').classList.add('hidden');
+  if (celebrationTimer) clearTimeout(celebrationTimer);
+  applyState(s);
   showToast('New round!');
 });
 
 socket.on('hint', function (data) {
-  showToast('Hint: starts with ' + data.letter + ', ' + data.length + ' letters');
+  showToast('Hint: starts with ' + data.letter + ', ' + data.length + ' letters', 5000);
 });
 
 socket.on('notice', function (data) {
