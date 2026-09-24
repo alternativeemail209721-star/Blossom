@@ -25,7 +25,7 @@ const socket = io();
 let settings = {
   theme: 'candy', showAvatars: true, avatarSize: 'medium', boardAnimationEnabled: true,
   confettiEnabled: true, compactMode: false, showDiagnostics: true, showRecentFeed: true,
-  recentFeedSize: 12, leaderboardSize: 10, bonusWordsEnabled: true, pointsMultiplier: 1,
+  recentFeedSize: 12, feedItemDurationMs: 4000, leaderboardSize: 10, bonusWordsEnabled: true, pointsMultiplier: 1,
   minGuessLength: 4, hintCooldownMs: 8000, hintDurationMs: 5000, skipCooldownMs: 600,
   autoAdvanceDelayMs: 5000, paused: false, soundEnabled: true, soundVolume: 0.5
 };
@@ -267,28 +267,73 @@ function renderLeaderboard(entries) {
   });
 }
 
-// ---------------- LIVE GUESS FEED (floating window) ----------------
-function renderLiveFeed(entries) {
+// ---------------- LIVE GUESS FEED (floating window, one at a time) ----------------
+// Only ever one guess is shown in the floating panel. New guesses queue up
+// (oldest dropped first if the queue grows past the "max queued" setting)
+// and each one fades out after "feedItemDurationMs" before the next fades in.
+let feedQueue = [];
+let feedShowing = false;
+let feedHideTimer = null;
+
+function queueFeedItem(row) {
+  if (!settings.showRecentFeed) return;
+  feedQueue.push(row);
+  const cap = Math.max(1, settings.recentFeedSize || 12);
+  while (feedQueue.length > cap) feedQueue.shift();
+  processFeedQueue();
+}
+
+function renderFeedRow(row) {
   const list = document.getElementById('liveFeedList');
   list.innerHTML = '';
-  entries.forEach(function (row) {
-    const item = document.createElement('div');
-    item.className = 'feedRow' + (row.secret ? '' : ' bonus');
-    if (settings.showAvatars) item.appendChild(makeAvatar(row.user, row.avatar));
-    const user = document.createElement('span');
-    user.className = 'feedUser';
-    user.textContent = row.user;
-    item.appendChild(user);
-    const word = document.createElement('span');
-    word.className = 'feedWord';
-    word.textContent = row.word;
-    item.appendChild(word);
-    const pts = document.createElement('span');
-    pts.className = 'feedPts';
-    pts.textContent = '+' + row.points;
-    item.appendChild(pts);
-    list.appendChild(item);
-  });
+  const item = document.createElement('div');
+  item.className = 'feedRow' + (row.secret ? '' : ' bonus');
+  if (settings.showAvatars) item.appendChild(makeAvatar(row.user, row.avatar));
+  const user = document.createElement('span');
+  user.className = 'feedUser';
+  user.textContent = row.user;
+  item.appendChild(user);
+  const word = document.createElement('span');
+  word.className = 'feedWord';
+  word.textContent = row.word;
+  item.appendChild(word);
+  const pts = document.createElement('span');
+  pts.className = 'feedPts';
+  pts.textContent = '+' + row.points;
+  item.appendChild(pts);
+  list.appendChild(item);
+  return item;
+}
+
+function processFeedQueue() {
+  if (feedShowing || !feedQueue.length || !settings.showRecentFeed) return;
+  feedShowing = true;
+  const row = feedQueue.shift();
+  const el = renderFeedRow(row);
+  const duration = Math.max(1000, settings.feedItemDurationMs || 4000);
+  if (feedHideTimer) clearTimeout(feedHideTimer);
+  feedHideTimer = setTimeout(function () {
+    if (reduceMotion) {
+      el.remove();
+      feedShowing = false;
+      processFeedQueue();
+      return;
+    }
+    el.classList.add('feedOut');
+    el.addEventListener('animationend', function onEnd() {
+      el.removeEventListener('animationend', onEnd);
+      el.remove();
+      feedShowing = false;
+      processFeedQueue();
+    });
+  }, duration);
+}
+
+function clearFeed() {
+  feedQueue = [];
+  feedShowing = false;
+  if (feedHideTimer) { clearTimeout(feedHideTimer); feedHideTimer = null; }
+  document.getElementById('liveFeedList').innerHTML = '';
 }
 
 // ---------------- DIAGNOSTICS ----------------
@@ -617,6 +662,7 @@ const settingsFields = {
   showDiagnostics: document.getElementById('setDiagnostics'),
   showRecentFeed: document.getElementById('setShowFeed'),
   recentFeedSize: document.getElementById('setFeedSize'),
+  feedItemDurationMs: document.getElementById('setFeedItemDuration'), // seconds in UI
   leaderboardSize: document.getElementById('setLeaderboardSize'),
   bonusWordsEnabled: document.getElementById('setBonusEnabled'),
   pointsMultiplier: document.getElementById('setPointsMultiplier'),
@@ -628,7 +674,7 @@ const settingsFields = {
   soundEnabled: document.getElementById('setSoundEnabled'),
   soundVolume: document.getElementById('setSoundVolume')
 };
-const MS_TO_SEC_FIELDS = ['hintCooldownMs', 'hintDurationMs', 'autoAdvanceDelayMs'];
+const MS_TO_SEC_FIELDS = ['hintCooldownMs', 'hintDurationMs', 'autoAdvanceDelayMs', 'feedItemDurationMs'];
 
 let suppressSettingsEvents = false;
 function populateSettingsForm() {
@@ -649,7 +695,9 @@ function applySettingsToDom() {
   document.documentElement.classList.toggle('hide-avatars', !settings.showAvatars);
   document.documentElement.classList.toggle('no-board-anim', !settings.boardAnimationEnabled);
   document.documentElement.classList.toggle('compact', !!settings.compactMode);
+  const feedWasHidden = document.documentElement.classList.contains('hide-feed');
   document.documentElement.classList.toggle('hide-feed', !settings.showRecentFeed);
+  if (!settings.showRecentFeed && !feedWasHidden) clearFeed();
   document.getElementById('diagnostics').style.display = settings.showDiagnostics ? '' : 'none';
   const pauseBtn = document.getElementById('hostPause');
   pauseBtn.textContent = settings.paused ? 'Resume' : 'Pause';
@@ -713,7 +761,6 @@ function applyState(s) {
   renderSlots(s.slots);
   renderBonus(s.bonusCount, s.bonusRecent);
   renderLeaderboard(s.leaderboard);
-  renderLiveFeed(s.recentGuesses || []);
   renderDiagnostics(s.rawEventCount, s.lastReceived, s.liveConnected, s.liveUsername, s.dictionarySize);
 }
 
@@ -736,6 +783,7 @@ socket.on('wordFound', function (data) {
   } else {
     showToast('Bonus! ' + data.user + ' found ' + data.word + ' (+' + data.points + ')');
   }
+  queueFeedItem({ user: data.user, word: data.word, points: data.points, secret: data.secret, avatar: data.avatar });
 });
 
 socket.on('roundComplete', function (s) {
@@ -747,6 +795,7 @@ socket.on('roundComplete', function (s) {
 socket.on('newRound', function (s) {
   document.getElementById('celebration').classList.add('hidden');
   if (celebrationTimer) clearTimeout(celebrationTimer);
+  clearFeed();
   applyState(s);
   showToast('New round!');
 });

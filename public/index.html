@@ -104,11 +104,12 @@
 
 </div>
 
-<!-- Floating live guess feed: shows each viewer's circular avatar, the word
-     they guessed, and the points they gained. Reserved space, toggled from
-     Settings, position configurable via CSS variables. -->
+<!-- Floating live guess feed: reserved space that shows ONE guess at a time —
+     the viewer's circular avatar, the word they guessed, and the points they
+     gained — then fades out a few seconds later before the next one shows.
+     Toggled from Settings, position configurable via CSS. -->
 <div id="liveFeedPanel" aria-label="Live guess feed">
-  <div id="liveFeedHeader">Live Guesses</div>
+  <div id="liveFeedHeader">Live Guess</div>
   <div id="liveFeedList"></div>
 </div>
 
@@ -180,7 +181,11 @@
           <input type="checkbox" id="setShowFeed" />
         </label>
         <label class="settingRow">
-          <span>Live feed size</span>
+          <span>Live feed: seconds each guess shows</span>
+          <input type="number" id="setFeedItemDuration" min="1" max="15" />
+        </label>
+        <label class="settingRow">
+          <span>Live feed: max queued guesses</span>
           <input type="number" id="setFeedSize" min="1" max="50" />
         </label>
         <label class="settingRow">

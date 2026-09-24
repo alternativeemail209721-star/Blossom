@@ -77,6 +77,7 @@ const DEFAULT_SETTINGS = {
   // Live feed & leaderboard
   showRecentFeed: true,
   recentFeedSize: 12,
+  feedItemDurationMs: 4000,
   leaderboardSize: 10,
   // Gameplay
   bonusWordsEnabled: true,
@@ -94,6 +95,7 @@ const DEFAULT_SETTINGS = {
 
 const SETTINGS_LIMITS = {
   recentFeedSize: [1, 50],
+  feedItemDurationMs: [1000, 15000],
   leaderboardSize: [3, 30],
   pointsMultiplier: [0.25, 5],
   minGuessLength: [3, 7],

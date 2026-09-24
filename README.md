@@ -35,10 +35,13 @@ change their size, from Settings.
 
 ## The floating live guess feed
 
-A small floating panel (top right by default) lists the most recent
-guesses as they come in — avatar, name, the word, and the points earned —
-like a live stream overlay. It's always reserved space that updates in
-real time; toggle it, and set how many guesses it keeps, from Settings.
+A small floating panel (top right by default) shows **one guess at a
+time** — avatar, name, the word, and the points earned — like a live
+stream overlay. Each guess fades out a few seconds after it appears, then
+the next one (if any came in while it was showing) fades in. It's always
+reserved space, even when empty. From Settings you can toggle it, set how
+many seconds each guess stays visible, and cap how many can be queued up
+if guesses arrive faster than they can be shown (older ones are dropped).
 
 ## Settings panel
 

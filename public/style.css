@@ -914,17 +914,16 @@ html.hide-avatars .avatar { display: none; }
 #leaderboard li:first-child .lbName { font-weight: 800; }
 
 /* =======================================================================
-   FLOATING LIVE GUESS FEED — a reserved, always-available overlay window
-   showing each viewer's avatar next to the word they guessed and the
-   points they gained. Toggle from Settings; position is fixed so it reads
-   well as a stream overlay in OBS-style layouts too.
+   FLOATING LIVE GUESS FEED — a reserved overlay window that shows exactly
+   ONE guess at a time (avatar, word, points), then fades it out a few
+   seconds later before the next queued guess fades in. Toggle from
+   Settings; position is fixed so it reads well as a stream overlay too.
    ======================================================================= */
 #liveFeedPanel {
   position: fixed;
   top: calc(env(safe-area-inset-top, 0px) + 64px);
   right: calc(env(safe-area-inset-right, 0px) + 10px);
-  width: min(260px, 42vw);
-  max-height: min(60vh, 420px);
+  width: min(260px, 60vw);
   background: rgba(255, 249, 252, 0.92);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -949,18 +948,18 @@ html.hide-controls #liveFeedPanel { display: none; }
   color: var(--ink-soft);
   border-bottom: 2px dotted rgba(var(--sh), 0.2);
 }
+/* exactly one row lives here at a time */
 #liveFeedList {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  padding: 6px 8px;
+  padding: 8px;
+  min-height: 42px;
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  align-items: center;
 }
 #liveFeedList:empty::after {
   content: "Guesses will appear here...";
   display: block;
-  padding: 10px 6px;
+  width: 100%;
+  padding: 4px 2px;
   font-size: 12px;
   color: var(--ink-soft);
   text-align: center;
@@ -968,24 +967,30 @@ html.hide-controls #liveFeedPanel { display: none; }
 .feedRow {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 6px;
+  gap: 8px;
+  padding: 6px 8px;
+  width: 100%;
   border-radius: 12px;
   background: rgba(var(--sh), 0.06);
-  font-size: 12.5px;
-  animation: feedIn 0.35s cubic-bezier(0.3, 1.4, 0.5, 1);
+  font-size: 13px;
+  animation: feedIn 0.3s cubic-bezier(0.3, 1.4, 0.5, 1);
 }
+.feedRow.feedOut { animation: feedOut 0.35s ease-in forwards; }
 .feedRow.bonus { background: #fff1b8; }
 .feedRow .feedUser { font-weight: 700; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34%; }
 .feedRow .feedWord { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; letter-spacing: 0.02em; }
 .feedRow .feedPts { flex: 0 0 auto; font-weight: 700; color: var(--strawberry-deep); }
 @keyframes feedIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes feedOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-6px) scale(0.96); }
 }
 
 @media (max-width: 480px) {
-  #liveFeedPanel { width: min(220px, 56vw); top: calc(env(safe-area-inset-top, 0px) + 58px); }
+  #liveFeedPanel { width: min(220px, 62vw); top: calc(env(safe-area-inset-top, 0px) + 58px); }
 }
 
 /* host panel: new controls need to wrap nicely with everything else */
