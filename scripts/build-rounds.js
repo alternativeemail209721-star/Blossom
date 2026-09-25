@@ -2,10 +2,17 @@
 // Builds data/rounds.json — the puzzle rounds the game cycles through.
 //
 // Each round = 7 letters (one is the "center" letter every word must use)
-// plus 20 SECRET words the audience is hunting for. Every secret word is
-// picked from data/common-words.txt so viewers are asked for words they
-// can realistically guess. (Any other real English word from the big
-// dictionary is still accepted as a BONUS word during play.)
+// plus a LENGTH for each of the 20 secret-word slots (e.g. five 4-letter
+// slots, six 5-letter slots, ...). The game does NOT store which exact word
+// fills each slot — at play time, ANY real word from the word database that
+// (a) is the right length for an open slot, (b) uses only this round's
+// letters, and (c) includes the center letter is accepted and fills that
+// slot. This file only has to prove a round is *fair*: that enough
+// everyday words actually exist for each length, using data/common-words.txt
+// as the "is this realistically guessable" check. (Any other real English
+// word from the big dictionary is still accepted as a BONUS word during
+// play, and data/secret-exclude.txt keeps overly obscure words out of the
+// secret slots even at play time.)
 //
 // Run:  npm run build-rounds
 // Options:  node scripts/build-rounds.js 60      (make 60 rounds, default 40)
@@ -135,10 +142,16 @@ candidates.forEach(function (c) {
   });
   if (words.length < SECRET_PER_ROUND) return;
 
+  // We only keep the LENGTH of each sample word, not the word itself — the
+  // sample just proves 20 words of this length distribution genuinely exist
+  // for this letter set. Which exact word fills each slot is decided live,
+  // from the full dictionary, when someone actually guesses it.
+  const slotLengths = words.map(function (x) { return x.length; }).sort(function (a, b) { return a - b; });
+
   chosen.push({
     letters: shuffle(c.letters).map(function (l) { return l.toUpperCase(); }),
     center: c.center.toUpperCase(),
-    words: words.map(function (x) { return x.toUpperCase(); })
+    slotLengths: slotLengths
   });
 });
 

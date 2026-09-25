@@ -12,15 +12,44 @@ This one folder is everything: game, word database, and deploy settings.
 
 - Each round shows 7 letters. Every word must be **4+ letters**, use only those
   letters (repeats allowed), and **include the center letter**.
-- There are **20 secret words** per round, each 4 to 8 letters long. The screen
-  tells viewers how long they are: a colored chip per length ("5 letters 2/6")
-  and a number badge plus one dot per letter on every unfound slot.
-  A ★ marks a word that uses all 7 letters (15 points).
+- There are **20 secret-word slots** per round, each with a target length from
+  4 to 8 letters. The screen tells viewers how long they are: a colored chip
+  per length ("5 letters 2/6") and a number badge plus one dot per letter on
+  every unfound slot. A ★ marks a found word that uses all 7 letters
+  (15 points).
+- **A slot is NOT one specific pre-chosen word.** Any real word from the word
+  database of the right length, that only uses this round's letters and
+  includes the center letter, fills that slot — whichever such word a viewer
+  happens to type first. This makes the game noticeably easier: instead of
+  hunting for one exact answer, viewers just need to find *any* word of a
+  length that still has an open slot. (`data/secret-exclude.txt` keeps very
+  obscure/technical words from being accepted as slot-fillers — they still
+  work as bonus words.)
+- Once every slot of a given length is full, any further word of that length
+  is accepted as a **bonus word** instead — same as any other real word that
+  isn't currently needed for an open slot.
 - **Any other real English word** from the word database is accepted as a
   **bonus word** for half points. Bonus words do not fill slots.
 - Points by length: 4 letters = 1, 5 = 3, 6 = 5, 7+ = 8, all-7-letters = 15.
 - Find all 20 secret words to win the round; the next round starts on its own.
   There are 40 rounds and the game loops.
+
+## Scoring
+
+Every viewer keeps their own running score, keyed by their TikTok username
+(their `uniqueId`) in Live mode, or by name in Offline/Test mode. Every point
+a viewer earns — from a secret word or a bonus word — is **added** to their
+own existing total; it never gets redirected to whoever happened to guess
+most recently, and it never overwrites another viewer's score. That is true
+for both the This-Round leaderboard (resets every round) and the All-Time
+leaderboard (keeps accumulating until a host resets it).
+
+Note for testers: the **Test Mode** "Simulate Random Correct Guess" button
+and the custom-text tester now reuse a small, fixed pool of pretend viewer
+names instead of minting a brand-new random name on every single click —
+otherwise every simulated guess looked like a "new" one-off viewer and the
+leaderboard never seemed to accumulate anything. Real TikTok viewers in Live
+mode were never affected by that — this only changed how testing behaves.
 
 ## Viewer avatars
 
@@ -251,12 +280,22 @@ never shown on stream. Add your own lines any time.
 
 ## 4. Changing rounds
 
-- `data/rounds.json` holds the 40 rounds (7 letters, center letter, 20 secret
-  words each). `npm run build-rounds` rebuilds them from `data/common-words.txt`
-  (everyday words only, so secret words are guessable). Add `60` after the
-  command for more rounds: `node scripts/build-rounds.js 60`.
-- To ban a word from being a secret word (it still works as a bonus word), add
-  it to `data/secret-exclude.txt` and rebuild.
+- `data/rounds.json` holds the 40 rounds: 7 letters, a center letter, and 20
+  secret-slot **lengths** (e.g. six 4-letter slots, six 5-letter slots...).
+  It does NOT store the exact secret words anymore — those are matched live
+  against the full word database during play (see "How the game works"
+  above), so the game stays fair without needing to know every possible
+  answer in advance.
+- `npm run build-rounds` rebuilds `data/rounds.json` from
+  `data/common-words.txt` (it uses everyday words to pick letter sets and
+  slot-length distributions that are provably fair — i.e. genuinely have
+  enough real words available — while still leaving the exact word for each
+  slot open at play time). Add `60` after the command for more rounds:
+  `node scripts/build-rounds.js 60`.
+- To ban a word from ever being auto-accepted as a secret word (it still
+  works as a bonus word), add it to `data/secret-exclude.txt`. This is
+  checked live, so you can edit and redeploy it any time without rebuilding
+  rounds.
 
 ## Health check
 
@@ -277,7 +316,7 @@ data/
   blocked-words.txt        never accepted
   common-words.txt         pool for secret words
   secret-exclude.txt       words kept out of secret slots
-  rounds.json              the 40 rounds
+  rounds.json              the 40 rounds (letters + center + secret-slot lengths, not exact words)
   settings.json            saved Settings-panel values (created automatically)
   secrets.json             your saved Euler Stream key (created automatically, never uploaded)
 scripts/

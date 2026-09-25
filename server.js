@@ -108,6 +108,15 @@ const blocked = new Set(
     .filter(function (l) { return l && l[0] !== '#'; })
 );
 
+// Real words that are valid guesses, but too obscure/abbreviated/technical to
+// ever be picked automatically as a SECRET word. They still work as bonus
+// words. See data/secret-exclude.txt.
+const secretExclude = new Set(
+  readLines(path.join(DATA_DIR, 'secret-exclude.txt'))
+    .map(function (l) { return l.trim().toLowerCase(); })
+    .filter(function (l) { return l && l[0] !== '#'; })
+);
+
 const dictionary = new Set();
 
 function loadDictionary() {
@@ -229,8 +238,13 @@ function saveSettings() {
 }
 
 // ---------------- ROUNDS ----------------
-// Each round: 7 letters, 1 center letter, and 20 SECRET words that fill the
-// board. Every other real word from the dictionary is a BONUS word.
+// Each round: 7 letters, 1 center letter, and 20 SECRET-word SLOTS, each
+// slot just a target length (e.g. five 4-letter slots, six 5-letter
+// slots...). There is no fixed list of exact secret words: at play time,
+// ANY real word from the dictionary that (a) is the right length for an
+// open slot, (b) uses only this round's letters, and (c) includes the
+// center letter fills that slot. Every other real word from the dictionary
+// is a BONUS word instead.
 function isPangram(word, letters) {
   const wset = new Set(word.split(''));
   for (const l of letters) { if (!wset.has(l)) return false; }
@@ -248,28 +262,58 @@ function loadRounds() {
     const letters = (r.letters || []).map(function (l) { return String(l).toUpperCase(); });
     const center = String(r.center || '').toUpperCase();
     const letterSet = new Set(letters);
-    const seen = new Set();
-    const words = [];
-    (r.words || []).forEach(function (w) {
-      const word = String(w).toUpperCase().replace(/[^A-Z]/g, '');
-      if (word.length < 3 || seen.has(word)) return;
-      if (blocked.has(word.toLowerCase())) return;
-      if (word.indexOf(center) === -1) return;
-      for (const ch of word) { if (!letterSet.has(ch)) return; }
-      seen.add(word);
-      words.push(word);
-      dictionary.add(word.toLowerCase()); // secret words are always accepted
-    });
-    words.sort(function (a, b) { return a.length - b.length || (a < b ? -1 : 1); });
-    const pangrams = new Set(words.filter(function (w) { return isPangram(w, letters); }));
-    return { letters: letters, center: center, letterSet: letterSet, words: words, wordSet: new Set(words), pangrams: pangrams };
-  }).filter(function (r) { return r.letters.length === 7 && r.words.length > 0; });
+
+    // Back-compat: an older rounds.json (pre-dynamic-secrets) stored an
+    // explicit "words" list instead of "slotLengths" — derive the lengths
+    // from it so old data files still load fine.
+    let slotLengths = Array.isArray(r.slotLengths) ? r.slotLengths.slice() : null;
+    if (!slotLengths && Array.isArray(r.words)) {
+      slotLengths = r.words.map(function (w) { return String(w).length; });
+    }
+    slotLengths = (slotLengths || [])
+      .map(function (n) { return Math.floor(Number(n)); })
+      .filter(function (n) { return isFinite(n) && n >= 3 && n <= 24; })
+      .sort(function (a, b) { return a - b; });
+
+    const lengthCounts = {};
+    slotLengths.forEach(function (n) { lengthCounts[n] = (lengthCounts[n] || 0) + 1; });
+
+    return {
+      letters: letters,
+      center: center,
+      letterSet: letterSet,
+      slotLengths: slotLengths,
+      lengthCounts: lengthCounts,
+      lengths: Object.keys(lengthCounts).map(Number).sort(function (a, b) { return a - b; }),
+      _candByLen: {}   // lazily-built cache: length -> [valid dictionary words], see candidatesForLength()
+    };
+  }).filter(function (r) { return r.letters.length === 7 && r.slotLengths.length > 0; });
 }
 
 const ROUNDS = loadRounds();
 if (!ROUNDS.length) {
   console.error('No usable rounds found in data/rounds.json. Run "npm run build-rounds" and restart.');
   process.exit(1);
+}
+
+// All dictionary words of a given length that are legal for this round
+// (built only from this round's letters, and containing the center letter),
+// with any secret-exclude words left out. Computed once per round+length and
+// cached on the round object, since scanning the whole dictionary is not
+// something we want to do on every guess.
+function candidatesForLength(round, len) {
+  if (round._candByLen[len]) return round._candByLen[len];
+  const list = [];
+  dictionary.forEach(function (w) {
+    if (w.length !== len) return;
+    if (secretExclude.has(w)) return;
+    const upper = w.toUpperCase();
+    if (upper.indexOf(round.center) === -1) return;
+    for (const ch of upper) { if (!round.letterSet.has(ch)) return; }
+    list.push(upper);
+  });
+  round._candByLen[len] = list;
+  return list;
 }
 
 console.log('Word database: ' + dictionary.size.toLocaleString() + ' words loaded (' + blocked.size + ' words on the blocked list are never accepted).');
@@ -282,8 +326,8 @@ console.log('Rounds loaded: ' + ROUNDS.length);
 const state = {
   mode: 'offline', // 'offline' | 'test' | 'live'
   roundIndex: 0,
-  foundSecret: new Map(),   // SECRET WORD -> who found it
-  bonusWords: [],           // [{ word, by, avatar }] valid dictionary words that are not secret words
+  foundByLength: {}, // length -> [{ word, by, avatar }] slots of that length filled so far, in fill order
+  bonusWords: [],    // [{ word, by, avatar }] valid dictionary words that are not secret words
   usedWords: new Set(),     // every word already found this round (secret + bonus)
   scores: {},               // username -> ALL-TIME points
   roundScores: {},          // username -> points earned THIS ROUND ONLY (reset every round)
@@ -321,6 +365,13 @@ function avatarFor(user) {
   return state.userAvatars[user] || null;
 }
 
+// How many secret slots are filled so far this round, across all lengths.
+function totalFoundCount() {
+  let n = 0;
+  Object.keys(state.foundByLength).forEach(function (len) { n += state.foundByLength[len].length; });
+  return n;
+}
+
 function topScores(n) {
   return Object.entries(state.scores)
     .map(function (e) { return { user: e[0], points: e[1], avatar: avatarFor(e[0]) }; })
@@ -339,22 +390,29 @@ function publicState() {
   const round = currentRound();
   const s = state.settings;
 
-  // One slot per secret word. Unfound slots only reveal how long the word is.
-  const slots = round.words.map(function (w) {
-    const slot = { len: w.length, pangram: round.pangrams.has(w) };
-    if (state.foundSecret.has(w)) {
-      slot.word = w;
-      slot.by = state.foundSecret.get(w);
-      slot.avatar = avatarFor(slot.by);
+  // One slot per length, in ascending length order. Within a length, filled
+  // slots (in the order they were found) come first, then empty ones.
+  // Unfound slots only reveal how long the word is.
+  const slots = [];
+  round.lengths.forEach(function (len) {
+    const found = state.foundByLength[len] || [];
+    const total = round.lengthCounts[len];
+    for (let i = 0; i < total; i++) {
+      if (i < found.length) {
+        const f = found[i];
+        slots.push({ len: len, word: f.word, by: f.by, avatar: avatarFor(f.by), pangram: isPangram(f.word, round.letters) });
+      } else {
+        slots.push({ len: len });
+      }
     }
-    return slot;
   });
 
-  const lengthCounts = {};
-  round.words.forEach(function (w) { lengthCounts[w.length] = (lengthCounts[w.length] || 0) + 1; });
-  const lengthSummary = Object.keys(lengthCounts)
-    .map(function (k) { return { len: Number(k), count: lengthCounts[k] }; })
-    .sort(function (a, b) { return a.len - b.len; });
+  const lengthSummary = round.lengths.map(function (len) {
+    return { len: len, count: round.lengthCounts[len] };
+  });
+
+  const minLen = round.slotLengths[0];
+  const maxLen = round.slotLengths[round.slotLengths.length - 1];
 
   return {
     mode: state.mode,
@@ -362,12 +420,12 @@ function publicState() {
     totalRounds: ROUNDS.length,
     letters: round.letters,
     center: round.center,
-    slotsTotal: round.words.length,
+    slotsTotal: round.slotLengths.length,
     slots: slots,
     lengthSummary: lengthSummary,
-    minLen: round.words[0].length,
-    maxLen: round.words[round.words.length - 1].length,
-    foundCount: state.foundSecret.size,
+    minLen: minLen,
+    maxLen: maxLen,
+    foundCount: totalFoundCount(),
     bonusCount: state.bonusWords.length,
     bonusRecent: state.bonusWords.slice(-8),
     dictionarySize: dictionary.size,
@@ -389,7 +447,7 @@ function broadcastState() {
 }
 
 function resetRoundState() {
-  state.foundSecret = new Map();
+  state.foundByLength = {};
   state.bonusWords = [];
   state.usedWords = new Set();
   state.roundScores = {};   // the "this round" leaderboard starts fresh every round
@@ -476,12 +534,19 @@ function resetRoundScores() {
 
 // onReject (optional) is called with (reason, word) when a guess is not accepted.
 // Chat guesses stay silent; the on-screen guess boxes use it to explain why.
+//
+// Every viewer keeps their own running score: `who` (their TikTok uniqueId,
+// or the name passed in for Offline/Test/host guesses) is the ONLY key ever
+// used to credit points, and points are always ADDED to whatever that viewer
+// already has in state.scores / state.roundScores — never overwritten and
+// never redirected to whoever guessed most recently. Two different guesses
+// from two different viewers always accumulate under two separate names.
 function handleGuess(rawText, user, avatar, onReject) {
   function reject(reason, word) {
     if (typeof onReject === 'function') onReject(reason, word);
   }
   try {
-    const who = user || 'Unknown';
+    const who = String(user || 'Unknown').trim() || 'Unknown';
     if (avatar) state.userAvatars[who] = avatar;
 
     state.rawEventCount += 1;
@@ -498,10 +563,19 @@ function handleGuess(rawText, user, avatar, onReject) {
 
     for (const ch of guess) { if (!round.letterSet.has(ch)) return reject('wrongLetters', guess); }
     if (guess.indexOf(round.center) === -1) return reject('missingCenter', guess);
+    if (!dictionary.has(guess.toLowerCase())) return reject('notAWord', guess);
 
-    const isSecret = round.wordSet.has(guess);
+    // SECRET vs BONUS is decided live: any dictionary word is a secret word
+    // if there is still an open slot of exactly its length (and it is not on
+    // the secret-exclude list) — it does not have to match any pre-chosen
+    // word. Once every slot of that length is full, the same word (or any
+    // other word of that length) just becomes a bonus word instead.
+    const len = guess.length;
+    const totalForLen = round.lengthCounts[len] || 0;
+    const filledForLen = (state.foundByLength[len] || []).length;
+    const isSecret = totalForLen > 0 && filledForLen < totalForLen && !secretExclude.has(guess.toLowerCase());
+
     if (!isSecret && !state.settings.bonusWordsEnabled) return reject('bonusDisabled', guess);
-    if (!isSecret && !dictionary.has(guess.toLowerCase())) return reject('notAWord', guess);
 
     let points = scoreForWord(guess, round.letters);
     if (!isSecret) points = Math.ceil(points / 2); // bonus words are worth half
@@ -509,10 +583,14 @@ function handleGuess(rawText, user, avatar, onReject) {
 
     state.usedWords.add(guess);
     if (isSecret) {
-      state.foundSecret.set(guess, who);
+      if (!state.foundByLength[len]) state.foundByLength[len] = [];
+      state.foundByLength[len].push({ word: guess, by: who, avatar: avatarFor(who) });
     } else {
       state.bonusWords.push({ word: guess, by: who, avatar: avatarFor(who) });
     }
+    // Accumulate — never assign/overwrite — so every viewer keeps building
+    // on their own total across every guess they make, all round (and all
+    // session) long.
     state.scores[who] = (state.scores[who] || 0) + points;
     state.roundScores[who] = (state.roundScores[who] || 0) + points;
 
@@ -522,14 +600,15 @@ function handleGuess(rawText, user, avatar, onReject) {
     });
     if (state.recentGuesses.length > MAX_RECENT_GUESSES) state.recentGuesses.length = MAX_RECENT_GUESSES;
 
+    const foundNow = totalFoundCount();
     io.emit('wordFound', {
       word: guess, user: who, points: points, secret: isSecret, avatar: avatarFor(who),
-      found: state.foundSecret.size, total: round.words.length,
+      found: foundNow, total: round.slotLengths.length,
       bonusCount: state.bonusWords.length
     });
     broadcastState();
 
-    if (isSecret && state.foundSecret.size >= round.words.length && !advancingRound) {
+    if (isSecret && foundNow >= round.slotLengths.length && !advancingRound) {
       advancingRound = true;
       io.emit('roundComplete', publicState());
       // Starts the countdown only if auto-advance is on for the current mode
@@ -543,12 +622,47 @@ function handleGuess(rawText, user, avatar, onReject) {
   }
 }
 
+// Picks a random still-open secret-word length for the current round, then a
+// random real dictionary word of exactly that length that is legal for the
+// round (built from this round's letters, includes the center letter, not
+// on the secret-exclude list, and not already used this round). Returns
+// null if nothing is available (e.g. every possible word for every open
+// length has already been found/guessed — rare, but possible late in a
+// round). Used by Hint, "Simulate Random Correct Guess", and the auto-bot.
+function pickOpenSecretWord(round) {
+  const openLens = round.lengths.filter(function (len) {
+    return (state.foundByLength[len] || []).length < round.lengthCounts[len];
+  });
+  const shuffledLens = openLens.slice().sort(function () { return Math.random() - 0.5; });
+  for (let i = 0; i < shuffledLens.length; i++) {
+    const len = shuffledLens[i];
+    const candidates = candidatesForLength(round, len).filter(function (w) { return !state.usedWords.has(w); });
+    if (candidates.length) return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+  return null;
+}
+
+// A small, fixed pool of pretend-viewer names for Offline/Test-mode
+// simulation, so repeated simulated guesses land on the SAME handful of
+// viewers and their scores visibly accumulate — instead of each simulated
+// guess minting a brand-new one-off name that only ever has one guess to
+// its name (which used to make the leaderboard look like points were going
+// to "whoever answered most recently" rather than building up per viewer).
+const SIMULATED_VIEWER_POOL = [
+  'TestViewer_Ava', 'TestViewer_Beck', 'TestViewer_Cleo',
+  'TestViewer_Drew', 'TestViewer_Enzo', 'TestViewer_Fay'
+];
+function randomSimulatedViewer() {
+  return SIMULATED_VIEWER_POOL[Math.floor(Math.random() * SIMULATED_VIEWER_POOL.length)];
+}
+
 // ---------------- TEST MODE: AUTO-ANSWER BOT ----------------
 // When Test Mode is active and "autoBotEnabled" is on, this keeps picking a
-// random unfound secret word and "guessing" it, at a steady pace, until the
-// round is complete — handy for demoing the game without typing anything.
-// It only ever acts while state.mode === 'test', so it can never interfere
-// with Offline or Live play.
+// random open secret slot and a random real word that fills it, at a steady
+// pace, until the round is complete — handy for demoing the game without
+// typing anything. It only ever acts while state.mode === 'test', so it can
+// never interfere with Offline or Live play. Always credited to the same
+// 'AutoBot' name, so its score accumulates normally too.
 const AUTO_BOT_INTERVAL_MS = 1600;
 setInterval(function () {
   try {
@@ -557,9 +671,8 @@ setInterval(function () {
     if (state.settings.paused) return;
     if (advancingRound) return; // round just completed — wait for the next one
     const round = currentRound();
-    const remaining = round.words.filter(function (w) { return !state.foundSecret.has(w); });
-    if (!remaining.length) return;
-    const pick = remaining[Math.floor(Math.random() * remaining.length)];
+    const pick = pickOpenSecretWord(round);
+    if (!pick) return;
     handleGuess(pick, 'AutoBot', null);
   } catch (err) {
     console.error('Auto-bot tick error:', err);
@@ -884,7 +997,6 @@ io.on('connection', function (socket) {
     try {
       if (!payload || !payload.type) return;
       const round = currentRound();
-      const remaining = round.words.filter(function (w) { return !state.foundSecret.has(w); });
 
       if (payload.type === 'skipRound') {
         skipRound();
@@ -907,21 +1019,26 @@ io.on('connection', function (socket) {
         const cooldown = state.settings.hintCooldownMs;
         if (now - state.lastHintAt < cooldown) {
           socket.emit('notice', { message: 'Hint is cooling down, try again shortly' });
-        } else if (remaining.length) {
-          state.lastHintAt = now;
-          const pick = remaining[Math.floor(Math.random() * remaining.length)];
-          // Sent to every screen, so the streamed display shows it too.
-          io.emit('hint', { letter: pick[0], length: pick.length, durationMs: state.settings.hintDurationMs });
         } else {
-          socket.emit('notice', { message: 'No secret words left to hint' });
+          const pick = pickOpenSecretWord(round);
+          if (pick) {
+            state.lastHintAt = now;
+            // Sent to every screen, so the streamed display shows it too.
+            io.emit('hint', { letter: pick[0], length: pick.length, durationMs: state.settings.hintDurationMs });
+          } else {
+            socket.emit('notice', { message: 'No secret words left to hint' });
+          }
         }
       } else if (payload.type === 'simulate') {
-        // Test mode: pretend a random viewer just typed one of the secret words.
-        if (!remaining.length) {
+        // Test mode: pretend one of a small, recurring pool of fake viewers
+        // just typed a word that fills an open secret slot — so, just like
+        // real viewers, their simulated score keeps accumulating guess after
+        // guess instead of starting over at a new name each click.
+        const pick = pickOpenSecretWord(round);
+        if (!pick) {
           socket.emit('notice', { message: 'No secret words left to simulate' });
         } else {
-          const pick = remaining[Math.floor(Math.random() * remaining.length)];
-          handleGuess(pick, 'TestViewer' + Math.floor(Math.random() * 999), null);
+          handleGuess(pick, randomSimulatedViewer(), null);
         }
       } else if (payload.type === 'overrideReveal') {
         handleGuess(payload.word, 'Host', null);

@@ -722,11 +722,15 @@ document.getElementById('testAutoBtn').addEventListener('click', function () {
   socket.emit('hostAction', { type: 'simulate' });
 });
 
+// One stable pretend-viewer identity per browser tab/session, so repeated
+// custom test guesses accumulate onto the same name on the leaderboard
+// instead of each click minting a brand-new one-off viewer with a single
+// guess to their name.
+const testCustomFakeUser = 'TestViewer_' + Math.floor(Math.random() * 900 + 100);
 document.getElementById('testCustomBtn').addEventListener('click', function () {
   const input = document.getElementById('testCustomInput');
   if (!input.value.trim() || !ensureConnected()) return;
-  const fakeUser = 'TestViewer' + Math.floor(Math.random() * 999);
-  socket.emit('guess', { text: input.value, user: fakeUser });
+  socket.emit('guess', { text: input.value, user: testCustomFakeUser });
   input.value = '';
 });
 document.getElementById('testCustomInput').addEventListener('keydown', function (e) {
