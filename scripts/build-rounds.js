@@ -8,21 +8,37 @@
 // (a) is the right length for an open slot, (b) uses only this round's
 // letters, and (c) includes the center letter is accepted and fills that
 // slot. This file only has to prove a round is *fair*: that enough
-// everyday words actually exist for each length, using data/common-words.txt
-// as the "is this realistically guessable" check. (Any other real English
-// word from the big dictionary is still accepted as a BONUS word during
-// play, and data/secret-exclude.txt keeps overly obscure words out of the
-// secret slots even at play time.)
+// everyday words actually exist for each length, using data/words-base.txt
+// (the same "everyday English words" list the live game itself is built on,
+// merged with the small hand-picked data/common-words.txt) as the "is this
+// realistically guessable" check. (Any other real English word from the big
+// dictionary is still accepted as a BONUS word during play, and
+// data/secret-exclude.txt keeps overly obscure words out of the secret
+// slots even at play time.)
+//
+// The game needs a big, non-repetitive rotation of rounds for long TikTok
+// LIVE sessions, so this script targets at least 1000 unique rounds by
+// default — comfortably more than fit in a single stream — using the full
+// ~111k-word base list as the candidate pool (rather than only the ~2,460
+// words in common-words.txt, which alone can only support a few dozen fair
+// rounds) and by no longer hard-capping how many rounds may share a center
+// letter to a flat 5.
 //
 // Run:  npm run build-rounds
-// Options:  node scripts/build-rounds.js 60      (make 60 rounds, default 40)
+// Options:  node scripts/build-rounds.js 1500      (make 1500 rounds, default 1000)
 
 const fs = require('fs');
 const path = require('path');
 
 const DATA = path.join(__dirname, '..', 'data');
-const ROUND_COUNT = parseInt(process.argv[2], 10) || 40;
+const ROUND_COUNT = parseInt(process.argv[2], 10) || 1000;
 const SECRET_PER_ROUND = 20;
+// How many rounds may share the same center letter. Scales with how many
+// rounds are requested so the deck stays varied instead of one letter (e.g.
+// "E") crowding out the rest, but never blocks reaching ROUND_COUNT the way
+// a flat cap of 5 used to (26 letters x 5 = 130 rounds max, however many
+// were asked for).
+const MAX_PER_CENTER = Math.max(20, Math.ceil(ROUND_COUNT / 10));
 
 function readList(file) {
   try {
@@ -36,9 +52,13 @@ const blocked = new Set(readList('blocked-words.txt'));
 // Words that are real but too obscure / abbreviated / technical to be a SECRET word.
 // (They are still accepted as bonus words in the game.)
 const excluded = new Set(readList('secret-exclude.txt'));
-const base = new Set(readList('words-base.txt').filter(function (w) { return !blocked.has(w); }));
-const common = readList('common-words.txt').filter(function (w) {
-  return base.has(w) && !blocked.has(w) && !excluded.has(w) && w.length >= 4 && w.length <= 8;
+const baseList = readList('words-base.txt').filter(function (w) { return !blocked.has(w); });
+// The candidate pool for building/proving rounds: the full everyday base
+// list plus anything extra in common-words.txt (in practice common-words.txt
+// is already a subset of words-base.txt, but a user's own additions there
+// are picked up too), filtered to the lengths a secret slot can be.
+const common = Array.from(new Set(baseList.concat(readList('common-words.txt')))).filter(function (w) {
+  return !blocked.has(w) && !excluded.has(w) && w.length >= 4 && w.length <= 8;
 });
 
 // Small seeded random generator. Each round gets its own seed (built from its
@@ -117,7 +137,7 @@ candidates.forEach(function (c) {
   if (chosen.length >= ROUND_COUNT) return;
   const key = c.letters.join('');
   if (usedSets.has(key)) return;
-  if ((centerUse[c.center] || 0) >= 5) return;
+  if ((centerUse[c.center] || 0) >= MAX_PER_CENTER) return;
   useSeed(key + c.center);
   usedSets.add(key);
   centerUse[c.center] = (centerUse[c.center] || 0) + 1;

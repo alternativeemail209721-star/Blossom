@@ -723,6 +723,11 @@ function extractChat(data) {
 function stopLive() {
   liveToken += 1;
   if (tiktokConnection) {
+    // Belt-and-braces alongside the myToken guards on each handler above:
+    // strip the listeners too, so a connection object we are discarding
+    // truly cannot deliver another 'chat' event even if disconnect() takes
+    // a moment to finish.
+    try { tiktokConnection.removeAllListeners && tiktokConnection.removeAllListeners(); } catch (e) { /* ignore */ }
     try { tiktokConnection.disconnect(); } catch (e) { /* ignore */ }
   }
   tiktokConnection = null;
@@ -775,6 +780,7 @@ function startLiveInner(username, typedKey) {
     return new Promise(function (resolve, reject) {
       try {
         if (tiktokConnection) {   // never leave an old half-open connection behind
+          try { tiktokConnection.removeAllListeners && tiktokConnection.removeAllListeners(); } catch (e) { /* ignore */ }
           try { tiktokConnection.disconnect(); } catch (e) { /* ignore */ }
           tiktokConnection = null;
         }
@@ -789,7 +795,26 @@ function startLiveInner(username, typedKey) {
           wsClientOptions: { timeout: 15000 }
         });
 
+        // SCORING-ACCUMULATION BUG FIX: every handler below guards on
+        // `myToken === liveToken` before doing anything. Without this guard,
+        // a "stale" connection — one belonging to a previous connect
+        // attempt that this function has already told to disconnect() (see
+        // stopLive() above and the top of attemptConnect()) — could keep
+        // right on delivering 'chat' events for a little while after
+        // disconnect() was called (disconnecting is not always instant, and
+        // some retries/redeploys briefly overlap with an old connection).
+        // Only the success path in connect().then() below used to check the
+        // token; these four handlers did not, so during any reconnect (a
+        // network hiccup, a retried Connect click, etc.) BOTH the old and
+        // the new connection stayed attached to the SAME TikTok live chat
+        // feed and BOTH fired 'chat' for every real viewer comment — every
+        // genuine guess got scored twice (or more, after repeated retries)
+        // for the rest of the session. Ignoring events from any connection
+        // that is no longer the current one fixes this at the root, so a
+        // viewer's score can only ever grow by the points of guesses they
+        // actually made.
         tiktokConnection.on('chat', function (data) {
+          if (myToken !== liveToken) return;   // stale connection — ignore
           try {
             if (!loggedSample) {
               loggedSample = true;
@@ -803,16 +828,19 @@ function startLiveInner(username, typedKey) {
         });
 
         tiktokConnection.on('streamEnd', function () {
+          if (myToken !== liveToken) return;   // stale connection — ignore
           console.log('Live stream ended.');
           stopLive();
         });
 
         tiktokConnection.on('disconnected', function () {
+          if (myToken !== liveToken) return;   // stale connection — ignore
           state.liveConnected = false;
           broadcastState();
         });
 
         tiktokConnection.on('error', function (err) {
+          if (myToken !== liveToken) return;   // stale connection — ignore
           console.error('TikTok connection error:', redactKeys(err && err.message ? err.message : err, apiKey));
         });
 
