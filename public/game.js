@@ -471,21 +471,94 @@ function launchConfetti() {
   }
 }
 
-let celebrationTimer = null;
-function showCelebration() {
+// Small standalone renderer for the two round-complete leaderboard lists
+// (kept separate from fillLeaderboardList so the celebration card never
+// depends on which tab — This Round / All-Time — the main leaderboard panel
+// currently has open).
+function fillCelebrationList(el, entries, emptyText) {
+  el.innerHTML = '';
+  if (!entries.length) {
+    const empty = document.createElement('li');
+    empty.className = 'lbEmpty';
+    empty.textContent = emptyText;
+    el.appendChild(empty);
+    return;
+  }
+  entries.slice(0, 5).forEach(function (row, i) {
+    const li = document.createElement('li');
+    const rank = document.createElement('span');
+    rank.className = 'rank';
+    rank.textContent = (i + 1) + '.';
+    li.appendChild(rank);
+    if (settings.showAvatars) li.appendChild(makeAvatar(row.user, row.avatar));
+    const name = document.createElement('span');
+    name.className = 'lbName';
+    name.textContent = row.user;
+    li.appendChild(name);
+    const pts = document.createElement('span');
+    pts.className = 'lbPts';
+    pts.textContent = row.points + ' pts';
+    li.appendChild(pts);
+    el.appendChild(li);
+  });
+}
+
+let celebrationCountdownTimer = null;
+
+function stopCelebrationCountdown() {
+  if (celebrationCountdownTimer) { clearInterval(celebrationCountdownTimer); celebrationCountdownTimer = null; }
+}
+
+// Starts (or shows a static "waiting for host" message instead of) the
+// countdown to the next round. `roundEndsIn` is the number of ms the server
+// says it will wait before auto-advancing, or null when auto-advance is off
+// for the mode the game is in right now.
+function startCelebrationCountdown(roundEndsIn) {
+  stopCelebrationCountdown();
+  const el = document.getElementById('celebrationCountdown');
+  if (typeof roundEndsIn !== 'number' || roundEndsIn <= 0) {
+    el.textContent = 'Waiting for the host to start the next round\u2026';
+    el.classList.add('waiting');
+    return;
+  }
+  el.classList.remove('waiting');
+  const endAt = Date.now() + roundEndsIn;
+  function tick() {
+    const msLeft = endAt - Date.now();
+    if (msLeft <= 0) {
+      el.textContent = 'Starting next round\u2026';
+      stopCelebrationCountdown();
+      return;
+    }
+    const secLeft = Math.ceil(msLeft / 1000);
+    el.textContent = 'Next round in ' + secLeft + (secLeft === 1 ? ' second\u2026' : ' seconds\u2026');
+  }
+  tick();
+  celebrationCountdownTimer = setInterval(tick, 250);
+}
+
+// Shows the round-complete overlay: a celebratory header, the This-Round and
+// All-Time leaderboards (so the audience sees who won this round AND where
+// they stand overall), and a countdown to the next round. Stays open until
+// 'newRound' arrives (or the host/viewer taps it away).
+function showCelebration(roundEndsIn) {
   const el = document.getElementById('celebration');
+  fillCelebrationList(document.getElementById('celebRoundLb'), lastRoundLeaderboard, 'No points yet this round');
+  fillCelebrationList(document.getElementById('celebAllTimeLb'), lastAllTimeLeaderboard, 'No points yet');
+  startCelebrationCountdown(roundEndsIn);
   el.classList.remove('hidden');
   launchConfetti();
   playRoundCompleteSound();
-  if (celebrationTimer) clearTimeout(celebrationTimer);
-  celebrationTimer = setTimeout(function () {
-    el.classList.add('hidden');
-  }, 4500);
 }
 
-document.getElementById('celebration').addEventListener('click', function () {
-  if (celebrationTimer) clearTimeout(celebrationTimer);
-  this.classList.add('hidden');
+function hideCelebration() {
+  stopCelebrationCountdown();
+  document.getElementById('celebration').classList.add('hidden');
+}
+
+document.getElementById('celebration').addEventListener('click', function (e) {
+  if (e.target.closest('#celebrationCard')) return;   // tapping the card itself shouldn't dismiss it
+  hideCelebration();
 });
 
 // ---------------- CONNECTION AWARENESS ----------------
@@ -1069,14 +1142,13 @@ socket.on('wordFound', function (data) {
 });
 
 socket.on('roundComplete', function (s) {
-  applyState(s);
-  showCelebration();
+  applyState(s);   // updates lastRoundLeaderboard / lastAllTimeLeaderboard first
+  showCelebration(s.roundEndsIn);
 });
 
 // A new round started (auto after a win, or the host skipped): show it right away.
 socket.on('newRound', function (s) {
-  document.getElementById('celebration').classList.add('hidden');
-  if (celebrationTimer) clearTimeout(celebrationTimer);
+  hideCelebration();
   clearFeed();
   applyState(s);
   showToast('New round!');

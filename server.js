@@ -610,11 +610,18 @@ function handleGuess(rawText, user, avatar, onReject) {
 
     if (isSecret && foundNow >= round.slotLengths.length && !advancingRound) {
       advancingRound = true;
-      io.emit('roundComplete', publicState());
-      // Starts the countdown only if auto-advance is on for the current mode
-      // (Live / Offline / Test). When it is off, the round stays "complete"
-      // (celebration shown, no new guesses can fill it since every slot is
-      // found) until the host presses Skip Round to move on manually.
+      // Tell every screen whether (and in how many ms) the game will move on
+      // by itself, so the round-complete overlay can show an accurate
+      // countdown — or "waiting for host" when auto-advance is off for the
+      // current mode (Live / Offline / Test).
+      const willAdvance = autoAdvanceOnForMode();
+      io.emit('roundComplete', Object.assign({}, publicState(), {
+        roundEndsIn: willAdvance ? state.settings.autoAdvanceDelayMs : null
+      }));
+      // Starts the countdown only if auto-advance is on for the current mode.
+      // When it is off, the round stays "complete" (celebration shown, no
+      // new guesses can fill it since every slot is found) until the host
+      // presses Skip Round to move on manually.
       syncRoundAdvance();
     }
   } catch (err) {
@@ -685,6 +692,22 @@ let liveRetryCount = 0;
 let liveToken = 0;            // bumped on every connect/disconnect so stale retries stop
 const MAX_LIVE_RETRIES = 3;
 
+// tiktok-live-connector's event objects are protobuf-decoded class instances
+// (some fields can be BigInt, e.g. numeric IDs) rather than plain JSON, and
+// their exact shape has shifted across v2.x releases. Flattening through
+// JSON first guarantees every field we look at is a plain string/object we
+// can safely read, no matter which internal representation the installed
+// version happens to use.
+function toPlain(data) {
+  try {
+    return JSON.parse(JSON.stringify(data, function (key, value) {
+      return typeof value === 'bigint' ? value.toString() : value;
+    }));
+  } catch (e) {
+    return data || {};
+  }
+}
+
 // Finds the viewer's real TikTok profile picture URL in whatever shape the
 // event arrives in. Prefers a URL the browser can actually display (jpeg/png/
 // webp) over .heic, which most browsers cannot render.
@@ -699,9 +722,10 @@ function pickAvatarUrl(data) {
   }
   const u = data.user || {};
   const d = data.userDetails || {};
-  add(data.profilePictureUrl); add(u.profilePictureUrl);
-  add(d.profilePictureUrls); add(d.profilePictureUrl);
+  // Current tiktok-live-connector v2 schema: user.profilePicture.urls[]
   add(u.profilePicture); add(data.profilePicture);
+  add(u.profilePictureUrl); add(data.profilePictureUrl);
+  add(d.profilePictureUrls); add(d.profilePictureUrl);
   add(u.avatarThumb); add(data.avatarThumb);
   add(u.avatarMedium); add(data.avatarMedium);
   add(u.avatarLarger); add(data.avatarLarger);
@@ -711,13 +735,49 @@ function pickAvatarUrl(data) {
   return (displayable[0] || urls[0]);
 }
 
-function extractChat(data) {
-  // Fallback chain, because the exact field names have shifted between
-  // library versions and TikTok payload variants.
-  const user = (data && (data.uniqueId || (data.user && data.user.uniqueId) || data.nickname)) || 'Unknown';
-  const text = (data && (data.comment || data.text || data.content)) || '';
+// The TikTok @handle (uniqueId) is the stable, always-unique identity, so it
+// stays the crediting key — exactly like before. Nickname is only used when
+// uniqueId is missing outright (rare/malformed events).
+function pickIdentity(data) {
+  if (!data) return '';
+  const u = data.user || {};
+  const candidates = [u.uniqueId, data.uniqueId, u.nickname, data.nickname];
+  for (let i = 0; i < candidates.length; i++) {
+    const v = candidates[i];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return '';
+}
+
+// Remembers the best avatar seen for each TikTok identity (from 'chat' AND
+// 'member'/join events, whichever arrives first), so a viewer's circular
+// profile photo stays correct and consistent everywhere in the game even if
+// one particular event happens to arrive without a picture.
+const knownAvatars = {}; // identity -> avatar URL
+function rememberAvatar(identity, avatar) {
+  if (!identity || !avatar) return;
+  knownAvatars[identity] = avatar;
+}
+
+function extractChat(rawData) {
+  const data = toPlain(rawData);
+  const identity = pickIdentity(data);
+  let avatar = pickAvatarUrl(data);
+  if (!avatar && identity && knownAvatars[identity]) avatar = knownAvatars[identity];
+  if (identity) rememberAvatar(identity, avatar);
+  const text = (data.comment || data.text || data.content) || '';
+  return { user: identity || 'Unknown', text: text, avatar: avatar };
+}
+
+// 'member' fires when a viewer joins the stream — often carries a clean
+// avatar before that viewer ever types anything, so caching it here means
+// their very first guess already shows the right circular photo.
+function extractMember(rawData) {
+  const data = toPlain(rawData);
+  const identity = pickIdentity(data);
   const avatar = pickAvatarUrl(data);
-  return { user: user, text: text, avatar: avatar };
+  if (identity) rememberAvatar(identity, avatar);
+  return { user: identity, avatar: avatar };
 }
 
 function stopLive() {
@@ -825,6 +885,14 @@ function startLiveInner(username, typedKey) {
           } catch (err) {
             console.error('Error handling chat event:', err);
           }
+        });
+
+        // Warms the name/avatar cache as soon as a viewer joins, so their
+        // first guess already shows their real name and circular photo
+        // instead of momentarily falling back to initials.
+        tiktokConnection.on('member', function (data) {
+          if (myToken !== liveToken) return;   // stale connection — ignore
+          try { extractMember(data); } catch (err) { /* ignore malformed member payloads */ }
         });
 
         tiktokConnection.on('streamEnd', function () {

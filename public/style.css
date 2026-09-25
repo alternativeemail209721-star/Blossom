@@ -717,19 +717,88 @@ button, input { font-family: var(--font); }
 }
 #celebration { cursor: pointer; }
 #celebration.hidden { display: none; }
+#celebrationCard {
+  position: relative;
+  width: min(420px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--cream);
+  color: var(--ink);
+  border-radius: 24px;
+  padding: 18px 18px 16px 18px;
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.4);
+  text-align: center;
+  cursor: default;
+  animation: celebPop 0.32s cubic-bezier(0.2, 1.4, 0.5, 1) both;
+}
+@keyframes celebPop {
+  from { transform: scale(0.85); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
 #celebrationText {
   position: relative;
-  font-size: clamp(30px, 9vw, 44px);
+  font-size: clamp(24px, 7vw, 34px);
   font-weight: 700;
-  color: var(--butter);
-  text-shadow: 0 4px 0 var(--butter-deep), 0 8px 0 var(--butter-deeper), 0 14px 18px rgba(0, 0, 0, 0.35);
+  color: var(--butter-deep);
+  text-shadow: 0 3px 0 var(--butter-deeper), 0 8px 14px rgba(0, 0, 0, 0.25);
   animation: pulse 0.6s ease-in-out infinite alternate;
-  text-align: center;
+  margin-bottom: 8px;
 }
 @keyframes pulse {
-  from { transform: scale(1) rotate(-2deg); }
-  to { transform: scale(1.12) rotate(2deg); }
+  from { transform: scale(1) rotate(-1.5deg); }
+  to { transform: scale(1.08) rotate(1.5deg); }
 }
+#celebrationBoards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 6px 0 12px 0;
+}
+.celebLbSection {
+  background: var(--surface2);
+  border-radius: 16px;
+  padding: 8px 12px 10px 12px;
+  text-align: left;
+}
+.celebLbSection h4 {
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ink-soft);
+}
+.celebLbSection ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 168px;
+  overflow-y: auto;
+}
+.celebLbSection li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 0;
+  font-size: 14px;
+  border-bottom: 1px solid rgba(var(--sh), 0.08);
+}
+.celebLbSection li:last-child { border-bottom: 0; }
+.celebLbSection li.lbEmpty { list-style: none; padding: 8px 0; font-size: 13px; color: var(--ink-soft); border-bottom: 0; }
+.celebLbSection li .rank { min-width: 1.5em; font-weight: 700; color: var(--strawberry-deep); text-align: right; }
+.celebLbSection li .lbName { font-weight: 600; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.celebLbSection li .lbPts { font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
+.celebLbSection li:first-child .lbName { font-weight: 800; }
+#celebrationCountdown {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  background: var(--butter-soft);
+  border-radius: 999px;
+  padding: 7px 14px;
+  display: inline-block;
+}
+#celebrationCountdown.waiting { background: var(--surface2); }
 
 #confetti { position: absolute; inset: 0; pointer-events: none; }
 #confetti i {
