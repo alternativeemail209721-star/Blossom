@@ -22,6 +22,10 @@
     <button class="modeBtn" data-mode="live">Live</button>
     <span id="modeLabel">OFFLINE</span>
     <button id="leaderboardBtn" class="iconBtn" type="button" title="Leaderboard (L)" aria-label="Open leaderboard">&#127942;</button>
+    <div id="themeMenuWrap">
+      <button id="themeBtn" class="iconBtn" type="button" title="Theme" aria-label="Choose theme" aria-haspopup="true" aria-expanded="false">&#127912;</button>
+      <div id="themeMenu" class="hidden" role="menu" aria-label="Theme options"></div>
+    </div>
     <button id="settingsBtn" class="iconBtn" type="button" title="Settings" aria-label="Open settings">&#9881;</button>
     <button id="hideBtn" class="iconBtn" type="button" title="Hide controls (H)" aria-label="Hide controls">&#128065;</button>
     <button id="fsBtn" class="iconBtn" type="button" title="Fullscreen (F)" aria-label="Enter fullscreen">&#9974;</button>
@@ -170,13 +174,7 @@
         <h3>Appearance</h3>
         <label class="settingRow">
           <span>Theme</span>
-          <select id="setTheme">
-            <option value="candy">Candy Pink</option>
-            <option value="mint">Minty Fresh</option>
-            <option value="sunset">Sunset</option>
-            <option value="ocean">Ocean Breeze</option>
-            <option value="midnight">Midnight</option>
-          </select>
+          <select id="setTheme"></select>
         </label>
         <label class="settingRow">
           <span>Show viewer avatars</span>

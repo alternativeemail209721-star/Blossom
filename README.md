@@ -49,14 +49,31 @@ queued up if guesses arrive faster than they can be shown. It stays visible in
 the clean "Hide controls" stream view too. It is the
 only pop-up shown for a found word, so nothing else floats over the instructions.
 
+## Theme picker (top bar)
+
+The small symbol button in the top bar (next to the trophy) opens a **theme
+dropdown** — tap it to see the full name of all 13 themes, each with its own
+symbol; only the symbol shows on the button itself once you pick one, to keep
+the toolbar tidy. Picking a theme there does exactly the same thing as
+picking it from Settings > Appearance — both are kept in sync — and it
+applies instantly on every connected screen, saved to `data/settings.json`.
+Every theme (including the 8 new ones — Dark, Light, Cream, Sky Blue, Meadow
+Green, Blossom Pink, Lavender Violet, Honey Gold) recolors the whole game:
+buttons, chips, inputs, wells, the mochi board's plate, the celebration text,
+and the top/bottom bars, not just the background. The two darkest themes,
+**Dark** and **Midnight**, additionally flip every panel and button surface
+to a dark, professionally-contrasted palette instead of just tinting the
+light-mode ones, so text stays easy to read.
+
 ## Settings panel
 
 Tap the gear icon in the top bar to open **Settings**. Every change is
 instant on every connected screen and saved to `data/settings.json`, so it
 survives a restart or redeploy. What you can customize:
 
-- **Appearance** — theme (Candy Pink, Minty Fresh, Sunset, Ocean Breeze,
-  Midnight), viewer avatars on/off and their size, board animations,
+- **Appearance** — theme (13 to choose from: Candy Pink, Minty Fresh, Sunset,
+  Ocean Breeze, Sky Blue, Meadow Green, Blossom Pink, Lavender Violet, Honey
+  Gold, Cream, Light, Dark, and Midnight), viewer avatars on/off and their size, board animations,
   confetti, compact/stream mode (hides the rules legend and diagnostics
   for a clean overlay), and the diagnostics panel itself.
 - **Live feed & leaderboard** — show/hide the docked live feed, how many

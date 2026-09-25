@@ -129,7 +129,7 @@ const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 const DEFAULT_SETTINGS = {
   // Appearance
-  theme: 'candy',                 // candy | mint | sunset | ocean | midnight
+  theme: 'candy',                 // see THEME_OPTIONS below for the full list
   showAvatars: true,
   avatarSize: 'medium',           // small | medium | large
   boardAnimationEnabled: true,
@@ -174,7 +174,10 @@ const SETTINGS_LIMITS = {
   autoAdvanceDelayMs: [1000, 20000],
   soundVolume: [0, 1]
 };
-const THEME_OPTIONS = ['candy', 'mint', 'sunset', 'ocean', 'midnight'];
+const THEME_OPTIONS = [
+  'candy', 'mint', 'sunset', 'ocean', 'sky', 'meadow', 'blossom',
+  'lavender', 'honey', 'cream', 'light', 'dark', 'midnight'
+];
 const AVATAR_SIZES = ['small', 'medium', 'large'];
 
 function clampNum(n, range, fallback) {

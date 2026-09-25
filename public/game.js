@@ -32,6 +32,29 @@ let settings = {
   paused: false, soundEnabled: true, soundVolume: 0.5
 };
 
+// ---------------- THEMES ----------------
+// Single source of truth for every theme: id (matches data-theme in CSS and
+// the server's allow-list), a short symbol shown on the toolbar button and
+// next to the name in the dropdown, and the full name shown only once the
+// dropdown is open (or in the Settings panel's select).
+const THEMES = [
+  { id: 'candy',    name: 'Candy Pink',      icon: '\u{1F36C}', bar: '#ffdcee' }, // 🍬
+  { id: 'mint',     name: 'Minty Fresh',     icon: '\u{1F343}', bar: '#d6fff0' }, // 🍃
+  { id: 'sunset',   name: 'Sunset',          icon: '\u{1F305}', bar: '#ffe3cf' }, // 🌅
+  { id: 'ocean',    name: 'Ocean Breeze',    icon: '\u{1F30A}', bar: '#d6f0ff' }, // 🌊
+  { id: 'sky',      name: 'Sky Blue',        icon: '\u{1F324}\uFE0F', bar: '#eaf7ff' }, // 🌤️
+  { id: 'meadow',   name: 'Meadow Green',    icon: '\u{1F340}', bar: '#e6ffe0' }, // 🍀
+  { id: 'blossom',  name: 'Blossom Pink',    icon: '\u{1F338}', bar: '#fff0f7' }, // 🌸
+  { id: 'lavender', name: 'Lavender Violet', icon: '\u{1F49C}', bar: '#ede2ff' }, // 💜
+  { id: 'honey',    name: 'Honey Gold',      icon: '\u{1F36F}', bar: '#fff3d6' }, // 🍯
+  { id: 'cream',    name: 'Cream',           icon: '\u{1F366}', bar: '#fff8e8' }, // 🍦
+  { id: 'light',    name: 'Light',           icon: '\u2600\uFE0F', bar: '#ffffff' }, // ☀️
+  { id: 'dark',     name: 'Dark',            icon: '\u26AB', bar: '#121116' },    // ⚫
+  { id: 'midnight', name: 'Midnight',        icon: '\u{1F30C}', bar: '#1c1530' }  // 🌌
+];
+const THEME_BY_ID = {};
+THEMES.forEach(function (t) { THEME_BY_ID[t.id] = t; });
+
 // ---------------- AVATARS ----------------
 // Real TikTok avatars are used automatically whenever the server has one for
 // a viewer. Everyone else (offline/test/host, or a viewer TikTok gave no
@@ -796,6 +819,78 @@ document.getElementById('testAutoBotBtn').addEventListener('click', function () 
   socket.emit('hostAction', { type: 'toggleAutoBot' });
 });
 
+// ---------------- THEME PICKER (toolbar dropdown) ----------------
+// Builds the Settings panel's <select> options and the toolbar dropdown's
+// list items from the single THEMES array above, so both stay in sync.
+const setThemeSelect = document.getElementById('setTheme');
+THEMES.forEach(function (t) {
+  const opt = document.createElement('option');
+  opt.value = t.id;
+  opt.textContent = t.icon + '  ' + t.name;
+  setThemeSelect.appendChild(opt);
+});
+
+const themeBtn = document.getElementById('themeBtn');
+const themeMenu = document.getElementById('themeMenu');
+const themeMenuWrap = document.getElementById('themeMenuWrap');
+THEMES.forEach(function (t) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'themeOption';
+  btn.dataset.theme = t.id;
+  btn.setAttribute('role', 'menuitemradio');
+  // The icon is always visible; the full name only exists inside this open
+  // dropdown (and the Settings select) — the collapsed toolbar button shows
+  // just the current theme's symbol.
+  btn.innerHTML =
+    '<span class="themeIcon" aria-hidden="true">' + t.icon + '</span>' +
+    '<span class="themeName">' + t.name + '</span>' +
+    '<span class="themeCheck" aria-hidden="true">&#10003;</span>';
+  btn.addEventListener('click', function () {
+    sendSettingsUpdate({ theme: t.id });
+    closeThemeMenu();
+  });
+  themeMenu.appendChild(btn);
+});
+
+function openThemeMenu() {
+  themeMenu.classList.remove('hidden');
+  themeBtn.setAttribute('aria-expanded', 'true');
+}
+function closeThemeMenu() {
+  themeMenu.classList.add('hidden');
+  themeBtn.setAttribute('aria-expanded', 'false');
+}
+function themeMenuOpen() { return !themeMenu.classList.contains('hidden'); }
+themeBtn.addEventListener('click', function (e) {
+  e.stopPropagation();
+  if (themeMenuOpen()) closeThemeMenu(); else openThemeMenu();
+});
+document.addEventListener('click', function (e) {
+  if (!themeMenuOpen()) return;
+  if (!themeMenuWrap.contains(e.target)) closeThemeMenu();
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && themeMenuOpen()) closeThemeMenu();
+});
+
+// Reflects the current theme on the toolbar button (icon only, plus a
+// tooltip with the full name) and marks the matching row active in the
+// open dropdown / Settings select.
+function updateThemeUi() {
+  const id = settings.theme || 'candy';
+  const t = THEME_BY_ID[id] || THEMES[0];
+  themeBtn.textContent = t.icon;
+  themeBtn.title = 'Theme: ' + t.name;
+  themeBtn.setAttribute('aria-label', 'Choose theme (current: ' + t.name + ')');
+  const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeColorMeta && t.bar) themeColorMeta.setAttribute('content', t.bar);
+  Array.prototype.forEach.call(themeMenu.querySelectorAll('.themeOption'), function (btn) {
+    btn.classList.toggle('active', btn.dataset.theme === id);
+    btn.setAttribute('aria-checked', btn.dataset.theme === id ? 'true' : 'false');
+  });
+}
+
 // ---------------- SETTINGS PANEL ----------------
 const settingsOverlay = document.getElementById('settingsOverlay');
 const settingsFields = {
@@ -842,6 +937,7 @@ function populateSettingsForm() {
 
 function applySettingsToDom() {
   document.documentElement.setAttribute('data-theme', settings.theme || 'candy');
+  updateThemeUi();
   document.documentElement.setAttribute('data-avatar', settings.avatarSize || 'medium');
   document.documentElement.classList.toggle('hide-avatars', !settings.showAvatars);
   document.documentElement.classList.toggle('no-board-anim', !settings.boardAnimationEnabled);
