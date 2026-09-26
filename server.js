@@ -188,11 +188,19 @@ const THEME_OPTIONS = [
   'candy', 'mint', 'sunset', 'ocean', 'sky', 'meadow', 'blossom',
   'lavender', 'honey', 'cream', 'light', 'dark', 'midnight'
 ];
-// The 7 letter-friends' species — "mochi" (the original squishy blob) plus
-// 7 more, all built the same way (CSS shapes/gradients, same bob/blink/boing
-// animations) so they all match mochi's level of cuteness and motion.
+// The 7 letter-friends' species. Two families:
+//  - the original squishy "mochi" blob plus 7 palette/silhouette variants
+//    (bear, cat, bunny, panda, chick, cloud, star) that all share mochi's
+//    round-blob body, soft radial-gradient shading, and bob/blink/boing
+//    animation.
+//  - a second, structurally different "robo" family (robot, alien, drone) —
+//    blocky/rounded-square or disc chassis, a dark glowing visor for eyes,
+//    an antenna or fins instead of ears, and its own float/blink motion —
+//    built from entirely separate CSS/markup so it never shares mochi's
+//    shape, gradients, or animations.
 const BOARD_THEME_OPTIONS = [
-  'mochi', 'bear', 'cat', 'bunny', 'panda', 'chick', 'cloud', 'star'
+  'mochi', 'bear', 'cat', 'bunny', 'panda', 'chick', 'cloud', 'star',
+  'robot', 'alien', 'drone'
 ];
 const AVATAR_SIZES = ['small', 'medium', 'large'];
 

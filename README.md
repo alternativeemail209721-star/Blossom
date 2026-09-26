@@ -115,9 +115,17 @@ survives a restart or redeploy. What you can customize:
 
 - **Appearance** — theme (13 to choose from: Candy Pink, Minty Fresh, Sunset,
   Ocean Breeze, Sky Blue, Meadow Green, Blossom Pink, Lavender Violet, Honey
-  Gold, Cream, Light, Dark, and Midnight), viewer avatars on/off and their size, board animations,
-  confetti, compact/stream mode (hides the rules legend and diagnostics
-  for a clean overlay), and the diagnostics panel itself.
+  Gold, Cream, Light, Dark, and Midnight), **Board friends** — the mascot
+  species holding the 7 letters, 11 to choose from across two completely
+  different designs: the original squishy **Mochi** blob plus 7 palette/
+  silhouette variants (Bear Cubs, Kittens, Bunnies, Pandas, Chicks, Clouds,
+  Stars), and a separate **Robots / Aliens / Drones** family with a blocky or
+  disc-shaped chassis, a glowing visor face, and an antenna or spinning fins
+  instead of ears — every friend's letter always sits on its own well below
+  the face, so no design ever covers it up, viewer avatars on/off and their
+  size, board animations, confetti, compact/stream mode (hides the rules
+  legend and diagnostics for a clean overlay), and the diagnostics panel
+  itself.
 - **Live feed & leaderboard** — show/hide the docked live feed, how many
   guesses it keeps, and how many names the leaderboard shows.
 - **Gameplay** — turn bonus words on/off, a points multiplier, minimum

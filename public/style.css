@@ -362,14 +362,16 @@ button, input { font-family: var(--font); }
   user-select: none;
 }
 
-/* mochi colors: highlight, light, mid, shade, letter ink */
-.mochi.mint     { --hi: #f4fffa; --c1: #b4f2dc; --c2: #6fd8b2; --deep: rgba(30, 140, 110, 0.4);  --ink-c: #1b6650; }
-.mochi.lavender { --hi: #f7f3ff; --c1: #d6c8ff; --c2: #a58cf3; --deep: rgba(90, 60, 190, 0.38);  --ink-c: #47309c; }
-.mochi.peach    { --hi: #fff5ee; --c1: #ffd3b4; --c2: #ffa276; --deep: rgba(200, 90, 40, 0.36);  --ink-c: #8f3f1c; }
-.mochi.sky      { --hi: #f2fbff; --c1: #b4e1ff; --c2: #6fbbf6; --deep: rgba(30, 100, 190, 0.36); --ink-c: #1b5a98; }
-.mochi.butter   { --hi: #fffce8; --c1: #fff0a0; --c2: #ffd54f; --deep: rgba(190, 140, 0, 0.36);  --ink-c: #7c5800; }
-.mochi.bubble   { --hi: #fff2f8; --c1: #ffc2dc; --c2: #ff8abf; --deep: rgba(200, 50, 120, 0.36); --ink-c: #9a2f66; }
-.mochi.center   { --hi: #fff4f8; --c1: #ff9ec6; --c2: #ff5fa2; --deep: rgba(190, 30, 100, 0.45); --ink-c: #ffffff; }
+/* mochi colors: highlight, light, mid, shade, letter ink — shared with the
+   .robo family below so both mascot families draw from the same 6 friend
+   colors + center, even though their shapes are completely different. */
+.mochi.mint,     .robo.mint     { --hi: #f4fffa; --c1: #b4f2dc; --c2: #6fd8b2; --deep: rgba(30, 140, 110, 0.4);  --ink-c: #1b6650; }
+.mochi.lavender, .robo.lavender { --hi: #f7f3ff; --c1: #d6c8ff; --c2: #a58cf3; --deep: rgba(90, 60, 190, 0.38);  --ink-c: #47309c; }
+.mochi.peach,    .robo.peach    { --hi: #fff5ee; --c1: #ffd3b4; --c2: #ffa276; --deep: rgba(200, 90, 40, 0.36);  --ink-c: #8f3f1c; }
+.mochi.sky,      .robo.sky      { --hi: #f2fbff; --c1: #b4e1ff; --c2: #6fbbf6; --deep: rgba(30, 100, 190, 0.36); --ink-c: #1b5a98; }
+.mochi.butter,   .robo.butter   { --hi: #fffce8; --c1: #fff0a0; --c2: #ffd54f; --deep: rgba(190, 140, 0, 0.36);  --ink-c: #7c5800; }
+.mochi.bubble,   .robo.bubble   { --hi: #fff2f8; --c1: #ffc2dc; --c2: #ff8abf; --deep: rgba(200, 50, 120, 0.36); --ink-c: #9a2f66; }
+.mochi.center,   .robo.center   { --hi: #fff4f8; --c1: #ff9ec6; --c2: #ff5fa2; --deep: rgba(190, 30, 100, 0.45); --ink-c: #ffffff; }
 .mochi.center .ch { text-shadow: 0 2px 0 #c2337a, 0 4px 6px rgba(120, 10, 60, 0.35); font-size: calc(var(--flower) * 0.14); }
 .mochi.center .body { box-shadow: inset 0 -12px 16px var(--deep), inset 0 6px 8px rgba(255, 255, 255, 0.7), 0 0 0 5px rgba(255, 255, 255, 0.55), 0 10px 14px -2px var(--deep); }
 .mochi.center { z-index: 5; }
@@ -571,6 +573,281 @@ button, input { font-family: var(--font); }
 .mochi.theme-star .mouth { top: 50%; }
 .mochi.theme-star .ch { top: 62%; }
 .mochi.theme-star .ground { bottom: -10%; }
+
+/* ---------- ROBO board friends: second, structurally different mascot
+   family (robot / alien / drone) ----------
+   Nothing here reuses .mochi. Different silhouette (rounded-square or disc
+   chassis instead of a soft round blob), different shading (a flat diagonal
+   gradient + skewed sheen bar instead of a radial highlight), different
+   face (a dark glowing visor instead of drawn eyes/cheeks/mouth on the body
+   itself), different headgear (an antenna or spinning fins instead of
+   ears), and its own float/blink motion. The letter always sits on its own
+   light "chest plate" well below the visor, in the app's fixed dark ink —
+   never inside or overlapping the visor/eyes/antenna — so decoration can
+   never crowd out the letter. */
+
+.robo {
+  position: absolute;
+  animation: roboFloat 4.2s ease-in-out infinite;
+  animation-delay: var(--d, 0s);
+}
+
+.robo .foot {
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  bottom: -6%;
+  height: 10%;
+  border-radius: 40%;
+  background: rgba(var(--sh), 0.3);
+  filter: blur(4px);
+}
+
+.robo .body {
+  position: absolute;
+  inset: 6% 3% 0 3%;
+  border-radius: 26% 26% 30% 30% / 32% 32% 22% 22%;
+  background: linear-gradient(155deg, var(--hi) 0%, var(--c1) 45%, var(--c2) 100%);
+  box-shadow:
+    inset 0 -9px 12px var(--deep),
+    inset 0 4px 6px rgba(255, 255, 255, 0.6),
+    0 8px 12px -3px var(--deep);
+  overflow: hidden;
+}
+
+/* flat diagonal sheen instead of mochi's soft round highlight */
+.robo .body::before {
+  content: "";
+  position: absolute;
+  top: -10%;
+  left: -20%;
+  width: 38%;
+  height: 140%;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
+  transform: skewX(-16deg);
+}
+
+.robo .bolt {
+  position: absolute;
+  top: 32%;
+  width: 8%;
+  height: 8%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff, var(--c2) 75%);
+  box-shadow: inset 0 -2px 2px var(--deep);
+}
+.robo .bolt.l { left: 1%; }
+.robo .bolt.r { right: 1%; }
+
+/* the visor: a dark glowing band that holds the eyes and a small mouth LED —
+   entirely separate from the letter, which lives lower down on the plate */
+.robo .visor {
+  position: absolute;
+  left: 15%;
+  right: 15%;
+  top: 20%;
+  height: 24%;
+  border-radius: 40% 40% 35% 35% / 65% 65% 35% 35%;
+  background: linear-gradient(160deg, #2c2542, #14101f);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6), inset 0 -2px 3px rgba(255, 255, 255, 0.06);
+}
+.robo .visor .rEye {
+  position: absolute;
+  top: 28%;
+  width: 16%;
+  height: 42%;
+  border-radius: 2px;
+  background: var(--robo-eye, #7be0ff);
+  box-shadow: 0 0 6px 1px var(--robo-eye, #7be0ff);
+  animation: roboBlink 5.4s infinite;
+  animation-delay: var(--d, 0s);
+}
+.robo .visor .rEye.l { left: 21%; }
+.robo .visor .rEye.r { right: 21%; }
+.robo .visor .rMouth {
+  position: absolute;
+  left: 38%;
+  right: 38%;
+  bottom: 16%;
+  height: 10%;
+  border-radius: 2px;
+  background: var(--robo-eye, #7be0ff);
+  opacity: 0.75;
+}
+
+/* antenna (robot) — a single stalk with a blinking tip light */
+.robo .antenna {
+  position: absolute;
+  top: -18%;
+  left: 50%;
+  width: 5%;
+  height: 20%;
+  border-radius: 3px;
+  background: var(--c2);
+  transform-origin: 50% 100%;
+  animation: antennaWag 3.4s ease-in-out infinite;
+  animation-delay: var(--d, 0s);
+}
+.robo .antenna::after {
+  content: "";
+  position: absolute;
+  top: -60%;
+  left: 50%;
+  width: 160%;
+  height: 55%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: #fff6bd;
+  box-shadow: 0 0 6px 2px rgba(255, 230, 120, 0.9);
+  animation: antennaBlink 2.6s infinite;
+}
+
+/* the chest plate that always carries the letter, well clear of the visor */
+.robo .plate {
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  top: 54%;
+  height: 30%;
+  border-radius: 30%;
+  background: linear-gradient(160deg, #fffefb, var(--hi));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.9), inset 0 -3px 5px rgba(var(--sh), 0.15);
+}
+.robo .ch {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 59%;
+  text-align: center;
+  font-size: calc(var(--flower) * 0.1);
+  line-height: 1;
+  font-weight: 700;
+  /* the plate stays light even in the Dark/Midnight app themes, so the
+     letter uses the same fixed per-color-slot ink as mochi's letter
+     (--ink-c, set alongside --hi/--c1/--c2 above) instead of the global
+     theme ink — otherwise it would turn light-on-light in those themes */
+  color: var(--ink-c, var(--ink));
+  text-shadow: 0 2px 0 rgba(255, 255, 255, 0.8);
+  user-select: none;
+}
+/* robo's plate is always a light panel (even for the "center" friend, whose
+   mochi counterpart instead paints its letter straight onto a saturated
+   body and so needs mochi.center's white --ink-c) — so robo.center keeps
+   its own fixed dark ink here rather than inheriting that white. */
+.robo.center .ch { font-size: calc(var(--flower) * 0.125); color: #9a2f66; }
+.robo.center { z-index: 5; }
+
+@keyframes roboFloat {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-4%) rotate(-2deg); }
+}
+@keyframes roboBlink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  94% { transform: scaleY(0.15); }
+}
+@keyframes antennaWag {
+  0%, 100% { transform: rotate(-7deg); }
+  50% { transform: rotate(7deg); }
+}
+@keyframes antennaBlink {
+  0%, 78%, 100% { opacity: 1; }
+  88% { opacity: 0.2; }
+}
+.robo .body.boing { animation: boing 0.6s cubic-bezier(0.3, 1.5, 0.5, 1); }
+
+/* -- robot: the default robo — rounded-square chassis, cyan visor -- */
+.robo.theme-robot .visor .rEye,
+.robo.theme-robot .visor .rMouth { --robo-eye: #7be0ff; }
+
+/* -- alien: taller dome head, wider single-strip visor with big round eyes,
+   two thin bent prongs instead of a straight antenna, no bolts -- */
+.robo.theme-alien .body {
+  border-radius: 44% 44% 28% 28% / 52% 52% 20% 20%;
+  transform: scaleY(1.08);
+  transform-origin: 50% 100%;
+}
+.robo.theme-alien .bolt { display: none; }
+.robo.theme-alien .visor { left: 10%; right: 10%; height: 22%; }
+.robo.theme-alien .visor .rEye { border-radius: 50%; width: 22%; height: 55%; top: 22%; }
+.robo.theme-alien .visor .rEye.l { left: 14%; }
+.robo.theme-alien .visor .rEye.r { right: 14%; }
+.robo.theme-alien .visor .rMouth { display: none; }
+.robo.theme-alien .visor .rEye,
+.robo.theme-alien .visor .rMouth { --robo-eye: #9dffb0; }
+.robo.theme-alien .antenna { display: none; }
+.robo.theme-alien .prong {
+  position: absolute;
+  top: -14%;
+  width: 4%;
+  height: 22%;
+  border-radius: 3px;
+  background: var(--c2);
+  transform-origin: 50% 100%;
+  animation: antennaWag 3.4s ease-in-out infinite;
+  animation-delay: var(--d, 0s);
+}
+.robo.theme-alien .prong.l { left: 30%; transform: rotate(-18deg); }
+.robo.theme-alien .prong.r { right: 30%; transform: rotate(18deg); }
+.robo.theme-alien .prong::after {
+  content: "";
+  position: absolute;
+  top: -60%; left: 50%;
+  width: 150%; height: 55%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: #d6ffe0;
+  box-shadow: 0 0 5px 2px rgba(160, 255, 180, 0.85);
+}
+
+/* -- drone: flat circular chassis, one round camera-lens eye, spinning fins
+   on top instead of an antenna, and a glowing hover ring instead of a
+   grounded shadow -- */
+.robo.theme-drone .body { border-radius: 50%; }
+.robo.theme-drone .body::before { border-radius: 50%; }
+.robo.theme-drone .bolt.l { left: -3%; top: 46%; }
+.robo.theme-drone .bolt.r { right: -3%; top: 46%; }
+.robo.theme-drone .visor {
+  left: 30%; right: 30%; top: 30%; height: 34%;
+  border-radius: 50%;
+}
+.robo.theme-drone .visor .rEye {
+  left: 20%; right: 20%; width: auto; top: 20%; height: 60%;
+  border-radius: 50%;
+}
+.robo.theme-drone .visor .rEye.r { display: none; }
+.robo.theme-drone .visor .rMouth { display: none; }
+.robo.theme-drone .visor .rEye { --robo-eye: #ffd27a; }
+.robo.theme-drone .antenna { display: none; }
+/* the drone's round visor reaches lower than the default rectangular one,
+   so its plate + letter are pushed further down to stay clear of it */
+.robo.theme-drone .plate { top: 68%; height: 22%; }
+.robo.theme-drone .ch { top: 72%; }
+.robo.theme-drone .fin {
+  position: absolute;
+  top: 2%;
+  width: 34%;
+  height: 8%;
+  border-radius: 6px;
+  background: var(--c2);
+  box-shadow: inset 0 -2px 3px var(--deep);
+  transform-origin: 50% 50%;
+  animation: finSpin 2.6s linear infinite;
+}
+.robo.theme-drone .fin.l { left: -6%; }
+.robo.theme-drone .fin.r { right: -6%; animation-delay: -1.3s; }
+@keyframes finSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.robo.theme-drone .foot {
+  bottom: -10%;
+  height: 8%;
+  background: transparent;
+  border-radius: 50%;
+  box-shadow: 0 0 10px 3px #ffd27a;
+  filter: none;
+  opacity: 0.6;
+}
 
 /* ---------- progress + lengths ---------- */
 #progress {
@@ -1097,6 +1374,9 @@ html.fs body { overflow-y: auto; }
   .mochi, .mochi .eye { animation: none; }
   .mochi .ear { animation: none !important; }
   .mochi .body.boing, .slot.pop, #celebrationText { animation: none; }
+  .robo, .robo .visor .rEye, .robo .antenna, .robo .antenna::after,
+  .robo .prong, .robo .fin { animation: none !important; }
+  .robo .body.boing { animation: none; }
   #progressFill { transition: none; }
 }
 
@@ -1479,6 +1759,13 @@ html.no-board-anim .mochi,
 html.no-board-anim .mochi .eye,
 html.no-board-anim .mochi .ear,
 html.no-board-anim .mochi .body.boing { animation: none !important; }
+html.no-board-anim .robo,
+html.no-board-anim .robo .visor .rEye,
+html.no-board-anim .robo .antenna,
+html.no-board-anim .robo .antenna::after,
+html.no-board-anim .robo .prong,
+html.no-board-anim .robo .fin,
+html.no-board-anim .robo .body.boing { animation: none !important; }
 
 /* =======================================================================
    AVATARS — circular viewer profile pictures (real TikTok avatar when

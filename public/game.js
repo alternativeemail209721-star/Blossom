@@ -55,18 +55,26 @@ const THEMES = [
 const THEME_BY_ID = {};
 THEMES.forEach(function (t) { THEME_BY_ID[t.id] = t; });
 
-// The board mascot's species — "mochi" (original) plus 7 more. Purely a
-// shape/decoration swap in CSS; every one keeps mochi's bob/blink/boing
-// animations and pastel palette, so the board stays just as cute and lively.
+// The board mascot's species, in two families:
+//  - "mochi" family: the original squishy round blob plus 7 palette/
+//    silhouette variants. Purely a shape/decoration swap in CSS; every one
+//    keeps mochi's bob/blink/boing animations and pastel palette.
+//  - "robo" family: a completely different mascot design — blocky/disc
+//    chassis, a dark glowing visor for a face, an antenna or spinning fins
+//    instead of ears, and its own float/blink motion. It never reuses
+//    mochi's markup, shape, or animations (see style.css).
 const BOARD_THEMES = [
-  { id: 'mochi', name: 'Mochi',       icon: '\u{1F361}' }, // 🍡
-  { id: 'bear',  name: 'Bear Cubs',   icon: '\u{1F43B}' }, // 🐻
-  { id: 'cat',   name: 'Kittens',     icon: '\u{1F431}' }, // 🐱
-  { id: 'bunny', name: 'Bunnies',     icon: '\u{1F430}' }, // 🐰
-  { id: 'panda', name: 'Pandas',      icon: '\u{1F43C}' }, // 🐼
-  { id: 'chick', name: 'Chicks',      icon: '\u{1F424}' }, // 🐤
-  { id: 'cloud', name: 'Clouds',      icon: '\u2601\uFE0F' }, // ☁️
-  { id: 'star',  name: 'Stars',       icon: '\u2B50' }  // ⭐
+  { id: 'mochi', name: 'Mochi',       icon: '\u{1F361}', family: 'mochi' }, // 🍡
+  { id: 'bear',  name: 'Bear Cubs',   icon: '\u{1F43B}', family: 'mochi' }, // 🐻
+  { id: 'cat',   name: 'Kittens',     icon: '\u{1F431}', family: 'mochi' }, // 🐱
+  { id: 'bunny', name: 'Bunnies',     icon: '\u{1F430}', family: 'mochi' }, // 🐰
+  { id: 'panda', name: 'Pandas',      icon: '\u{1F43C}', family: 'mochi' }, // 🐼
+  { id: 'chick', name: 'Chicks',      icon: '\u{1F424}', family: 'mochi' }, // 🐤
+  { id: 'cloud', name: 'Clouds',      icon: '\u2601\uFE0F', family: 'mochi' }, // ☁️
+  { id: 'star',  name: 'Stars',       icon: '\u2B50', family: 'mochi' }, // ⭐
+  { id: 'robot', name: 'Robots',      icon: '\u{1F916}', family: 'robo' }, // 🤖
+  { id: 'alien', name: 'Aliens',      icon: '\u{1F47D}', family: 'robo' }, // 👽
+  { id: 'drone', name: 'Drones',      icon: '\u{1F6F8}', family: 'robo' }  // 🛸
 ];
 const BOARD_THEME_BY_ID = {};
 BOARD_THEMES.forEach(function (t) { BOARD_THEME_BY_ID[t.id] = t; });
@@ -152,6 +160,8 @@ function critterExtras(theme) {
   return '';
 }
 
+// Builds one mochi-family friend: round blob body, eyes/cheeks/mouth drawn
+// directly on the body, letter centered over the face.
 function makeMochi(letter, colorClass, delay, theme) {
   const t = theme || 'mochi';
   const el = document.createElement('div');
@@ -168,6 +178,53 @@ function makeMochi(letter, colorClass, delay, theme) {
     '</div>';
   el.querySelector('.ch').textContent = letter;
   return el;
+}
+
+// Extra headgear markup per robo species, inserted inside .body ABOVE the
+// visor. Robot gets a single antenna; alien swaps it for two bent prongs;
+// drone drops it for a pair of spinning top fins. None of this ever touches
+// the visor, eyes, or the letter's chest plate below.
+function roboExtras(theme) {
+  if (theme === 'alien') {
+    return '<i class="prong l"></i><i class="prong r"></i>';
+  }
+  if (theme === 'drone') {
+    return '<i class="fin l"></i><i class="fin r"></i>';
+  }
+  return '<i class="antenna"></i>'; // robot (default robo look)
+}
+
+// Builds one robo-family friend: blocky/disc chassis, a dark glowing visor
+// for the face (never overlapping the letter), and its own headgear. This
+// is a completely separate shape/markup from makeMochi — see style.css.
+function makeRobo(letter, colorClass, delay, theme) {
+  const t = theme || 'robot';
+  const el = document.createElement('div');
+  el.className = 'robo theme-' + t + ' ' + colorClass;
+  el.style.setProperty('--d', delay + 's');
+  el.innerHTML =
+    '<span class="foot"></span>' +
+    '<div class="body">' +
+      roboExtras(t) +
+      '<i class="bolt l"></i><i class="bolt r"></i>' +
+      '<div class="visor">' +
+        '<i class="rEye l"></i><i class="rEye r"></i>' +
+        '<i class="rMouth"></i>' +
+      '</div>' +
+      '<div class="plate"></div>' +
+      '<b class="ch"></b>' +
+    '</div>';
+  el.querySelector('.ch').textContent = letter;
+  return el;
+}
+
+// Picks the right builder for whichever species is currently selected, so
+// the rest of the board code doesn't need to know the two families apart.
+function makeBoardFriend(letter, colorClass, delay, theme) {
+  const t = theme || 'mochi';
+  const def = BOARD_THEME_BY_ID[t];
+  if (def && def.family === 'robo') return makeRobo(letter, colorClass, delay, t);
+  return makeMochi(letter, colorClass, delay, t);
 }
 
 function renderBoard(letters, center) {
@@ -187,7 +244,7 @@ function renderBoard(letters, center) {
     const angle = (Math.PI * 2 * i) / friends.length - Math.PI / 2;
     const x = 50 + ring * Math.cos(angle);
     const y = 50 + ring * Math.sin(angle);
-    const el = makeMochi(letter, MOCHI_COLORS[i % MOCHI_COLORS.length], (i * 0.45).toFixed(2), theme);
+    const el = makeBoardFriend(letter, MOCHI_COLORS[i % MOCHI_COLORS.length], (i * 0.45).toFixed(2), theme);
     el.style.width = size + '%';
     el.style.height = size + '%';
     el.style.left = (x - size / 2) + '%';
@@ -195,7 +252,7 @@ function renderBoard(letters, center) {
     flowerEl.appendChild(el);
   });
 
-  const mid = makeMochi(center, 'center', 0.2, theme);
+  const mid = makeBoardFriend(center, 'center', 0.2, theme);
   mid.style.width = '34%';
   mid.style.height = '34%';
   mid.style.left = '33%';
