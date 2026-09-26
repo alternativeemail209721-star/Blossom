@@ -139,6 +139,7 @@ const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const DEFAULT_SETTINGS = {
   // Appearance
   theme: 'candy',                 // see THEME_OPTIONS below for the full list
+  boardTheme: 'mochi',            // see BOARD_THEME_OPTIONS below — the board mascot's species
   showAvatars: true,
   avatarSize: 'medium',           // small | medium | large
   boardAnimationEnabled: true,
@@ -187,6 +188,12 @@ const THEME_OPTIONS = [
   'candy', 'mint', 'sunset', 'ocean', 'sky', 'meadow', 'blossom',
   'lavender', 'honey', 'cream', 'light', 'dark', 'midnight'
 ];
+// The 7 letter-friends' species — "mochi" (the original squishy blob) plus
+// 7 more, all built the same way (CSS shapes/gradients, same bob/blink/boing
+// animations) so they all match mochi's level of cuteness and motion.
+const BOARD_THEME_OPTIONS = [
+  'mochi', 'bear', 'cat', 'bunny', 'panda', 'chick', 'cloud', 'star'
+];
 const AVATAR_SIZES = ['small', 'medium', 'large'];
 
 function clampNum(n, range, fallback) {
@@ -220,6 +227,8 @@ function sanitizeSettings(input) {
       out[key] = clampNum(val, SETTINGS_LIMITS[key], DEFAULT_SETTINGS[key]);
     } else if (key === 'theme') {
       out[key] = THEME_OPTIONS.indexOf(val) !== -1 ? val : DEFAULT_SETTINGS.theme;
+    } else if (key === 'boardTheme') {
+      out[key] = BOARD_THEME_OPTIONS.indexOf(val) !== -1 ? val : DEFAULT_SETTINGS.boardTheme;
     } else if (key === 'avatarSize') {
       out[key] = AVATAR_SIZES.indexOf(val) !== -1 ? val : DEFAULT_SETTINGS.avatarSize;
     } else {
@@ -322,10 +331,44 @@ if (dictionary.size < DICTIONARY_GOAL) {
 }
 console.log('Rounds loaded: ' + ROUNDS.length);
 
+// ---------------- ROUND ORDER (shuffle "bag") ----------------
+// A fresh, truly random shuffle of every round index, reshuffled from
+// scratch (with Math.random — not the seeded rnd() the builder script uses,
+// so it differs every time) each time the bag empties. Pulling rounds from
+// this bag instead of just counting 0,1,2,3... up through rounds.json means:
+//   - every round in the whole set gets played before any round repeats
+//     (no "why did that letter set show up twice in ten minutes"), and
+//   - because the server picks a brand new shuffle on every restart (i.e.
+//     the start of every new TikTok LIVE session), the very first round and
+//     the whole order that follows is different from last time — no more
+//     always opening on the same, or almost the same, letters.
+let roundBag = [];
+function refillRoundBag(avoidIndex) {
+  const arr = [];
+  for (let i = 0; i < ROUNDS.length; i++) arr.push(i);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  }
+  // Don't let the new shuffle's first pick be the same round that just
+  // finished (only matters right at the seam between two bags).
+  if (arr.length > 1 && typeof avoidIndex === 'number' && arr[arr.length - 1] === avoidIndex) {
+    const swapAt = Math.floor(Math.random() * (arr.length - 1));
+    const t = arr[arr.length - 1]; arr[arr.length - 1] = arr[swapAt]; arr[swapAt] = t;
+  }
+  roundBag = arr;
+}
+function nextBagRoundIndex(avoidIndex) {
+  if (!roundBag.length) refillRoundBag(avoidIndex);
+  return roundBag.pop();
+}
+
 // ---------------- GAME STATE ----------------
 const state = {
   mode: 'offline', // 'offline' | 'test' | 'live'
-  roundIndex: 0,
+  // A random starting round (see the bag above) — not always round 0 — so
+  // every new server start opens on different letters.
+  roundIndex: nextBagRoundIndex(),
   foundByLength: {}, // length -> [{ word, by, avatar }] slots of that length filled so far, in fill order
   bonusWords: [],    // [{ word, by, avatar }] valid dictionary words that are not secret words
   usedWords: new Set(),     // every word already found this round (secret + bonus)
@@ -462,7 +505,7 @@ function nextRound() {
   if (roundTimer) { clearTimeout(roundTimer); roundTimer = null; }
   advancingRound = false;
   lastAdvanceAt = Date.now();
-  state.roundIndex = (state.roundIndex + 1) % ROUNDS.length;
+  state.roundIndex = nextBagRoundIndex(state.roundIndex);
   resetRoundState();
   io.emit('newRound', publicState());
   broadcastState();

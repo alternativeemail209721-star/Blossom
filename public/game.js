@@ -23,7 +23,7 @@ const socket = io();
 // current settings, filled in as soon as the server sends state. Sensible
 // defaults here just avoid a flash of the wrong UI before the first 'state'.
 let settings = {
-  theme: 'candy', showAvatars: true, avatarSize: 'medium', boardAnimationEnabled: true,
+  theme: 'candy', boardTheme: 'mochi', showAvatars: true, avatarSize: 'medium', boardAnimationEnabled: true,
   confettiEnabled: true, compactMode: false, showDiagnostics: true, showRecentFeed: true,
   recentFeedSize: 12, feedItemDurationMs: 4000, leaderboardSize: 10, bonusWordsEnabled: true, pointsMultiplier: 1,
   minGuessLength: 4, hintCooldownMs: 8000, hintDurationMs: 5000, skipCooldownMs: 600,
@@ -54,6 +54,22 @@ const THEMES = [
 ];
 const THEME_BY_ID = {};
 THEMES.forEach(function (t) { THEME_BY_ID[t.id] = t; });
+
+// The board mascot's species — "mochi" (original) plus 7 more. Purely a
+// shape/decoration swap in CSS; every one keeps mochi's bob/blink/boing
+// animations and pastel palette, so the board stays just as cute and lively.
+const BOARD_THEMES = [
+  { id: 'mochi', name: 'Mochi',       icon: '\u{1F361}' }, // 🍡
+  { id: 'bear',  name: 'Bear Cubs',   icon: '\u{1F43B}' }, // 🐻
+  { id: 'cat',   name: 'Kittens',     icon: '\u{1F431}' }, // 🐱
+  { id: 'bunny', name: 'Bunnies',     icon: '\u{1F430}' }, // 🐰
+  { id: 'panda', name: 'Pandas',      icon: '\u{1F43C}' }, // 🐼
+  { id: 'chick', name: 'Chicks',      icon: '\u{1F424}' }, // 🐤
+  { id: 'cloud', name: 'Clouds',      icon: '\u2601\uFE0F' }, // ☁️
+  { id: 'star',  name: 'Stars',       icon: '\u2B50' }  // ⭐
+];
+const BOARD_THEME_BY_ID = {};
+BOARD_THEMES.forEach(function (t) { BOARD_THEME_BY_ID[t.id] = t; });
 
 // ---------------- AVATARS ----------------
 // Real TikTok avatars are used automatically whenever the server has one for
@@ -107,13 +123,44 @@ function makeAvatar(user, url) {
 const MOCHI_COLORS = ['mint', 'lavender', 'peach', 'sky', 'butter', 'bubble'];
 let boardKey = '';
 
-function makeMochi(letter, colorClass, delay) {
+// Extra decoration markup for the species that need it, inserted inside
+// .body BEFORE the eyes/cheeks/mouth/letter (so those still paint on top).
+// "cloud" and "star" need no extra elements — their look comes entirely
+// from CSS on .body itself (see style.css).
+function critterExtras(theme) {
+  if (theme === 'bear') {
+    return '<i class="ear l"></i><i class="ear r"></i>';
+  }
+  if (theme === 'cat') {
+    return '<i class="ear l"></i><i class="ear r"></i>' +
+      '<i class="whisker l"></i><i class="whisker r"></i>' +
+      '<i class="nose"></i>';
+  }
+  if (theme === 'bunny') {
+    return '<i class="ear l"></i><i class="ear r"></i>';
+  }
+  if (theme === 'panda') {
+    return '<i class="ear l"></i><i class="ear r"></i>' +
+      '<i class="patch l"></i><i class="patch r"></i>';
+  }
+  if (theme === 'chick') {
+    return '<i class="tuft"></i><i class="beak"></i>';
+  }
+  if (theme === 'cloud') {
+    return '<i class="puff l"></i><i class="puff r"></i>';
+  }
+  return '';
+}
+
+function makeMochi(letter, colorClass, delay, theme) {
+  const t = theme || 'mochi';
   const el = document.createElement('div');
-  el.className = 'mochi ' + colorClass;
+  el.className = 'mochi theme-' + t + ' ' + colorClass;
   el.style.setProperty('--d', delay + 's');
   el.innerHTML =
     '<span class="ground"></span>' +
     '<div class="body">' +
+      critterExtras(t) +
       '<i class="eye l"></i><i class="eye r"></i>' +
       '<i class="cheek l"></i><i class="cheek r"></i>' +
       '<i class="mouth"></i>' +
@@ -124,8 +171,9 @@ function makeMochi(letter, colorClass, delay) {
 }
 
 function renderBoard(letters, center) {
-  const key = letters.join('') + center;
-  if (key === boardKey) return;   // same letters: keep the animations running
+  const theme = settings.boardTheme || 'mochi';
+  const key = letters.join('') + center + '|' + theme;
+  if (key === boardKey) return;   // same letters + same theme: keep the animations running
   boardKey = key;
 
   const flowerEl = document.getElementById('flower');
@@ -139,7 +187,7 @@ function renderBoard(letters, center) {
     const angle = (Math.PI * 2 * i) / friends.length - Math.PI / 2;
     const x = 50 + ring * Math.cos(angle);
     const y = 50 + ring * Math.sin(angle);
-    const el = makeMochi(letter, MOCHI_COLORS[i % MOCHI_COLORS.length], (i * 0.45).toFixed(2));
+    const el = makeMochi(letter, MOCHI_COLORS[i % MOCHI_COLORS.length], (i * 0.45).toFixed(2), theme);
     el.style.width = size + '%';
     el.style.height = size + '%';
     el.style.left = (x - size / 2) + '%';
@@ -147,7 +195,7 @@ function renderBoard(letters, center) {
     flowerEl.appendChild(el);
   });
 
-  const mid = makeMochi(center, 'center', 0.2);
+  const mid = makeMochi(center, 'center', 0.2, theme);
   mid.style.width = '34%';
   mid.style.height = '34%';
   mid.style.left = '33%';
@@ -907,6 +955,14 @@ THEMES.forEach(function (t) {
   setThemeSelect.appendChild(opt);
 });
 
+const setBoardThemeSelect = document.getElementById('setBoardTheme');
+BOARD_THEMES.forEach(function (t) {
+  const opt = document.createElement('option');
+  opt.value = t.id;
+  opt.textContent = t.icon + '  ' + t.name;
+  setBoardThemeSelect.appendChild(opt);
+});
+
 const themeBtn = document.getElementById('themeBtn');
 const themeMenu = document.getElementById('themeMenu');
 const themeMenuWrap = document.getElementById('themeMenuWrap');
@@ -972,6 +1028,7 @@ function updateThemeUi() {
 const settingsOverlay = document.getElementById('settingsOverlay');
 const settingsFields = {
   theme: document.getElementById('setTheme'),
+  boardTheme: document.getElementById('setBoardTheme'),
   showAvatars: document.getElementById('setShowAvatars'),
   avatarSize: document.getElementById('setAvatarSize'),
   boardAnimationEnabled: document.getElementById('setBoardAnim'),

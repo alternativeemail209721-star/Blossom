@@ -422,6 +422,156 @@ button, input { font-family: var(--font); }
   100% { transform: scale(1, 1); }
 }
 
+/* ---------- board friends: 7 more species alongside mochi ----------
+   Every species reuses .mochi's body/eyes/cheeks/mouth/letter and its
+   bob / blink / boing animations — only the silhouette (ears, patches,
+   beak...) and, for cloud/star, the body shape itself change. All extra
+   parts are positioned inside .body so they inherit that critter's pastel
+   color (--hi/--c1/--c2/--deep) automatically, keeping every species just
+   as varied and candy-colored as mochi. */
+
+/* -- ears, shared base (bear / cat / bunny / panda) -- */
+.mochi .ear {
+  position: absolute;
+  top: -15%;
+  width: 30%;
+  height: 30%;
+  background: radial-gradient(70% 70% at 35% 30%, var(--hi) 0%, var(--c1) 55%, var(--c2) 100%);
+  box-shadow: inset 0 -4px 6px var(--deep);
+}
+.mochi .ear.l { left: -6%; }
+.mochi .ear.r { right: -6%; }
+
+/* bear: round teddy ears */
+.mochi.theme-bear .ear { border-radius: 50%; }
+.mochi.theme-bear .ear::after {
+  content: "";
+  position: absolute;
+  inset: 26%;
+  border-radius: 50%;
+  background: var(--c1);
+  opacity: 0.65;
+}
+
+/* cat: pointed ears + whiskers + nose */
+.mochi.theme-cat .ear {
+  width: 26%; height: 28%; top: -17%;
+  clip-path: polygon(50% 0%, 6% 100%, 94% 100%);
+}
+.mochi.theme-cat .ear.l { left: 0%; transform: rotate(-10deg); }
+.mochi.theme-cat .ear.r { right: 0%; transform: rotate(10deg); }
+.mochi.theme-cat .ear::after {
+  content: "";
+  position: absolute;
+  left: 26%; right: 26%; bottom: 10%; top: 34%;
+  background: var(--c1);
+  opacity: 0.7;
+  clip-path: polygon(50% 0%, 10% 100%, 90% 100%);
+}
+.mochi.theme-cat .whisker {
+  position: absolute;
+  top: 45%;
+  width: 20%;
+  height: 2px;
+  background: rgba(59, 31, 77, 0.45);
+  border-radius: 2px;
+}
+.mochi.theme-cat .whisker.l { left: -16%; transform: rotate(-8deg); box-shadow: 0 6px 0 rgba(59, 31, 77, 0.35), 0 -6px 0 rgba(59, 31, 77, 0.35); }
+.mochi.theme-cat .whisker.r { right: -16%; transform: rotate(8deg); box-shadow: 0 6px 0 rgba(59, 31, 77, 0.35), 0 -6px 0 rgba(59, 31, 77, 0.35); }
+.mochi.theme-cat .nose {
+  position: absolute;
+  top: 30%; left: 47%;
+  width: 6%; height: 5%;
+  background: rgba(59, 31, 77, 0.55);
+  clip-path: polygon(50% 100%, 5% 0%, 95% 0%);
+}
+
+/* bunny: tall swaying ears */
+.mochi.theme-bunny .ear {
+  width: 15%; height: 48%; top: -42%;
+  border-radius: 50% 50% 40% 40%;
+  transform-origin: 50% 100%;
+  animation: earSway 3.6s ease-in-out infinite;
+}
+.mochi.theme-bunny .ear.l { left: 15%; animation-delay: 0s; }
+.mochi.theme-bunny .ear.r { right: 15%; animation-delay: 0.25s; }
+.mochi.theme-bunny .ear::after {
+  content: "";
+  position: absolute;
+  inset: 16% 30%;
+  border-radius: 50%;
+  background: rgba(255, 130, 165, 0.55);
+}
+@keyframes earSway {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
+}
+
+/* panda: round ears + dark eye patches, always black/white regardless of
+   this critter's pastel slot, so it always reads as a panda */
+.mochi.theme-panda .ear {
+  border-radius: 50%;
+  background: linear-gradient(#4b4b58, #26262e);
+  box-shadow: none;
+}
+.mochi.theme-panda .patch {
+  position: absolute;
+  top: 15%;
+  width: 22%; height: 26%;
+  border-radius: 50%;
+  background: rgba(38, 38, 46, 0.88);
+}
+.mochi.theme-panda .patch.l { left: 12%; }
+.mochi.theme-panda .patch.r { right: 12%; }
+
+/* chick: head tuft + beak */
+.mochi.theme-chick .tuft {
+  position: absolute;
+  top: -10%; left: 44%;
+  width: 12%; height: 16%;
+  background: var(--c2);
+  border-radius: 50% 50% 0 50%;
+  transform: rotate(-20deg);
+}
+.mochi.theme-chick .beak {
+  position: absolute;
+  top: 38%; left: 42%;
+  width: 16%; height: 10%;
+  background: linear-gradient(#ffcf6b, #ffab2e);
+  clip-path: polygon(0% 20%, 100% 0%, 100% 100%, 0% 80%);
+}
+.mochi.theme-chick .mouth { display: none; }
+
+/* cloud: puffy lobed silhouette — two extra rounded lobes (added as .puff
+   elements, same trick as ears) tucked behind the main round body so the
+   outline reads as a fluffy cloud instead of a plain circle */
+.mochi.theme-cloud .body { border-radius: 50%; }
+.mochi.theme-cloud .puff {
+  position: absolute;
+  top: -14%;
+  width: 46%;
+  height: 46%;
+  border-radius: 50%;
+  background: radial-gradient(70% 70% at 35% 30%, var(--hi) 0%, var(--c1) 55%, var(--c2) 100%);
+  box-shadow: inset 0 -6px 8px var(--deep);
+}
+.mochi.theme-cloud .puff.l { left: -8%; }
+.mochi.theme-cloud .puff.r { right: -8%; }
+.mochi.theme-cloud .ground { opacity: 0.7; }
+
+/* star: five-point body via clip-path instead of a rounded blob */
+.mochi.theme-star .body {
+  border-radius: 0;
+  clip-path: polygon(50% 0%, 64% 34%, 100% 36%, 72% 58%, 82% 92%, 50% 72%, 18% 92%, 28% 58%, 0% 36%, 36% 34%);
+  box-shadow: none;
+}
+.mochi.theme-star .body::before { display: none; }
+.mochi.theme-star .eye { top: 40%; }
+.mochi.theme-star .cheek { top: 52%; }
+.mochi.theme-star .mouth { top: 50%; }
+.mochi.theme-star .ch { top: 62%; }
+.mochi.theme-star .ground { bottom: -10%; }
+
 /* ---------- progress + lengths ---------- */
 #progress {
   padding: 6px 14px 8px 14px;
@@ -945,6 +1095,7 @@ html.fs body { overflow-y: auto; }
 
 @media (prefers-reduced-motion: reduce) {
   .mochi, .mochi .eye { animation: none; }
+  .mochi .ear { animation: none !important; }
   .mochi .body.boing, .slot.pop, #celebrationText { animation: none; }
   #progressFill { transition: none; }
 }
@@ -1326,6 +1477,7 @@ html.compact #app { gap: 6px; }
 /* ---------- board animation toggle ---------- */
 html.no-board-anim .mochi,
 html.no-board-anim .mochi .eye,
+html.no-board-anim .mochi .ear,
 html.no-board-anim .mochi .body.boing { animation: none !important; }
 
 /* =======================================================================
