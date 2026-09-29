@@ -32,8 +32,9 @@ This one folder is everything: game, word database, and deploy settings.
   **bonus word** for half points. Bonus words do not fill slots.
 - Points by length: 4 letters = 1, 5 = 3, 6 = 5, 7+ = 8, all-7-letters = 15.
 - Find all 20 secret words to win the round; the next round starts on its own.
-  There are 1,500 rounds and the game loops, so a long LIVE session won't
-  repeat a board any time soon.
+  There are 12,600 rounds, played in a random order with none repeating
+  until all have been played, so even a very long LIVE session won't
+  repeat a board.
 
 ## Scoring
 
@@ -301,7 +302,7 @@ never shown on stream. Add your own lines any time.
 
 ## 4. Changing rounds
 
-- `data/rounds.json` holds 1,500 rounds: 7 letters, a center letter, and 20
+- `data/rounds.json` holds 12,600 rounds: 7 letters, a center letter, and 20
   secret-slot **lengths** (e.g. six 4-letter slots, six 5-letter slots...).
   It does NOT store the exact secret words anymore — those are matched live
   against the full word database during play (see "How the game works"
@@ -314,6 +315,16 @@ never shown on stream. Add your own lines any time.
   enough real words available — while still leaving the exact word for each
   slot open at play time. It defaults to 1,000 rounds; add a number after the
   command for a different amount, e.g. `node scripts/build-rounds.js 2000`.
+- `npm run add-rounds` **appends** 10,000 more unique rounds to the existing
+  `data/rounds.json` without touching the rounds already there (add a number
+  for a different amount, e.g. `node scripts/add-rounds.js 5000`). "Unique"
+  means no two rounds share the same 7 letters *and* center letter. It uses
+  unused letter sets first, then a second, different center letter on a set
+  (a different puzzle with different answers), never more than 2 centers per
+  set. With the bundled word list there are 12,600 rounds in total, which is
+  close to the most fair rounds it can support, so running it again adds few
+  or none. Note that `npm run build-rounds` rebuilds the whole file and
+  would replace all 12,600 rounds, so only run that one if you want that.
 - To ban a word from ever being auto-accepted as a secret word (it still
   works as a bonus word), add it to `data/secret-exclude.txt`. This is
   checked live, so you can edit and redeploy it any time without rebuilding
@@ -338,12 +349,13 @@ data/
   blocked-words.txt        never accepted
   common-words.txt         pool for secret words
   secret-exclude.txt       words kept out of secret slots
-  rounds.json              1,500 rounds (letters + center + secret-slot lengths, not exact words)
+  rounds.json              12,600 rounds (letters + center + secret-slot lengths, not exact words)
   settings.json            saved Settings-panel values (created automatically)
   secrets.json             your saved Euler Stream key (created automatically, never uploaded)
 scripts/
   build-dictionary.js      builds words-full.txt
-  build-rounds.js          builds rounds.json
+  build-rounds.js          rebuilds rounds.json from scratch (replaces everything)
+  add-rounds.js            appends new unique rounds to rounds.json
 ```
 
 Thanks: the bundled list comes from Hunspell's en_US dictionary (SCOWL).
